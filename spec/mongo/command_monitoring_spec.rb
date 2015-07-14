@@ -21,15 +21,12 @@ describe 'Command Monitoring' do
     class CommandMonitoringTestSubscriber
 
       def started(event)
-        p event
       end
 
       def succeeded(event)
-
       end
 
       def failed(event)
-
       end
     end
 
@@ -58,9 +55,8 @@ describe 'Command Monitoring' do
         it "generates the appropriate events" do
           test.expectations.each do |expectation|
             expect(subscriber).to receive(expectation.monitoring_call) do |event|
-              # expect(event.command_name).to eq(expectation.command_name)
-              # expect(event.database_name).to eq(expectation.database_name)
-              # expect(event.send(expectation.tested_method)).to eq(expectation.expected_value)
+              expect(event.command_name).to eq(expectation.command_name)
+              expect(event.database_name).to eq(expectation.database_name)
             end
           end
           begin

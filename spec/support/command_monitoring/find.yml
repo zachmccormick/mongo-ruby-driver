@@ -23,15 +23,14 @@ tests:
         command_name: "find"
         database_name: *database_name
       command_succeeded_event:
-        reply:
-          - { _id: 1, x: 11 }
         command_name: "find"
+        database_name: *database_name
   -
     description: "A successful find event with options"
     operation:
       name: "find"
       arguments:
-        filter: { _id: { $gt: 2 }}
+        filter: { _id: 1 }
         sort: { _id: 1 }
         skip: 2
         limit: 2
@@ -46,9 +45,8 @@ tests:
         command_name: "find"
         database_name: *database_name
       command_succeeded_event:
-        reply:
-          - { _id: 5, x: 55 }
         command_name: "find"
+        database_name: *database_name
   -
     description: "A failed find event"
     operation:
@@ -64,3 +62,4 @@ tests:
         database_name: *database_name
       command_failed_event:
         command_name: "find"
+        database_name: *database_name

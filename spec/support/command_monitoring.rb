@@ -44,7 +44,14 @@ module Mongo
       end
 
       def execute(collection)
-        collection.send(name, arguments['filter']).to_a
+        case name
+        when 'find'
+          view = collection.send(name, arguments['filter'])
+          arguments.each do |name, value|
+            view = view.send(name, value) unless name == 'filter'
+          end
+          view.to_a
+        end
       end
     end
 
@@ -62,22 +69,6 @@ module Mongo
 
       def database_name
         @expectation['database_name']
-      end
-
-      def tested_method
-        case @name
-        when 'command_started_event' then 'command'
-        when 'command_succeeded_event' then 'reply'
-        when 'command_failed_event' then 'message'
-        end
-      end
-
-      def expected_value
-        case @name
-        when 'command_started_event' then @expectation['command']
-        when 'command_succeeded_event' then @expectation['reply']
-        when 'command_failed_event' then @expectation['message']
-        end
       end
 
       def initialize(name, expectation)

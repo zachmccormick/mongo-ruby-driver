@@ -132,7 +132,8 @@ module Mongo
         if command?
           selector
         else
-          BSON::Document.new({ find: @collection, filter: selector }).merge(@options)
+          arguments = BSON::Document.new({ find: @collection, filter: selector })
+          arguments.merge(@options).select { |_, value| !value.nil? }
         end
       end
 
