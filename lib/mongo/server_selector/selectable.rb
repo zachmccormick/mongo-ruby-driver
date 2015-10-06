@@ -85,7 +85,7 @@ module Mongo
             server = servers.first
             return server if server.connectable?
           end
-          Mongo::Logger.logger.info("[jontest] could not get server for cluster #{cluster.inspect}: servers #{cluster.servers.inspect}, round trip time is #{cluster.servers.map(&:average_round_trip_time)}")
+          ::Rails.logger.info("[jontest] could not get server for cluster #{cluster.inspect}: servers #{cluster.servers.inspect}, round trip time is #{cluster.servers.map(&:average_round_trip_time)}")
           cluster.scan!
         end
         raise Error::NoServerAvailable.new(self)
