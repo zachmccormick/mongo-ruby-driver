@@ -47,6 +47,7 @@ module Mongo
       rescue Error::SocketError, Error::SocketTimeoutError
         retry_operation(&block)
       rescue Error::OperationFailure => e
+        Mongo::Logger.logger.info("[jontest] received #{e.inspect}, attempt is #{attempt}")
         if cluster.sharded? && (e.retryable? || e.unauthorized?)
           if e.unauthorized?
             cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate! } }
