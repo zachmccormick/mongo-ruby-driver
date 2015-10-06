@@ -36,7 +36,7 @@ module Mongo
     # How long to block for server selection before throwing an exception.
     #
     # @since 2.0.0
-    SERVER_SELECTION_TIMEOUT = 30.freeze
+    SERVER_SELECTION_TIMEOUT = 10.freeze
 
     # Primary read preference.
     #
