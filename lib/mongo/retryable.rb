@@ -85,6 +85,9 @@ module Mongo
       rescue Error::OperationFailure => e
         if e.message.include?(NOT_MASTER)
           retry_operation(&block)
+        elsif e.message.include?("RUNNER_DEAD")
+          Mongo::Logger.logger.warn("[jontest] got RUNNER_DEAD on #{cluster.servers.inspect}")
+          retry_operation(&block)
         else
           raise e
         end
