@@ -50,6 +50,7 @@ module Mongo
         if cluster.sharded? && (e.retryable? || e.unauthorized?)
           if attempt < cluster.max_read_retries
             if e.unauthorized?
+              Mongo::Logger.logger.warn("[jontest] got unauthorized on #{cluster.servers.inspect}, re-authenticating")
               cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate! } }
             end
 
