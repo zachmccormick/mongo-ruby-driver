@@ -76,10 +76,7 @@ module Mongo
         unless socket
           @socket = address.socket(timeout, ssl_options)
           socket.connect!
-          if authenticator
-            authenticator.login(self)
-            @authenticated = true
-          end
+          authenticate!
         end
         true
       end
@@ -102,6 +99,19 @@ module Mongo
           @authenticated = false
         end
         true
+      end
+
+      # If there is an authentication mechanism in place, attempt to log in
+      #
+      # @example Authenticate or reauthenticate the connection
+      #   connection.authenticate!
+      #
+      # @since 2.2.0
+      def authenticate!
+        if authenticator
+          authenticator.login(self)
+          @authenticated = true
+        end
       end
 
       # Dispatch the provided messages to the connection. If the last message
