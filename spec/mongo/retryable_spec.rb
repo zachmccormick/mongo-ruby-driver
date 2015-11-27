@@ -66,6 +66,10 @@ describe Mongo::Retryable do
       before do
         expect(operation).to receive(:execute).and_raise(Mongo::Error::SocketError).ordered
         expect(cluster).to receive(:scan!).and_return(true).ordered
+        expect(cluster).to receive(:disconnect!).and_return(true).ordered
+        expect(cluster).to receive(:max_read_retries).and_return(1).ordered
+        expect(cluster).to receive(:read_retry_interval).and_return(0.1).ordered
+        allow(cluster).to receive(:servers).and_return([])
         expect(operation).to receive(:execute).and_return(true).ordered
       end
 
@@ -79,6 +83,10 @@ describe Mongo::Retryable do
       before do
         expect(operation).to receive(:execute).and_raise(Mongo::Error::SocketTimeoutError).ordered
         expect(cluster).to receive(:scan!).and_return(true).ordered
+        expect(cluster).to receive(:disconnect!).and_return(true).ordered
+        expect(cluster).to receive(:max_read_retries).and_return(1).ordered
+        expect(cluster).to receive(:read_retry_interval).and_return(0.1).ordered
+        allow(cluster).to receive(:servers).and_return([])
         expect(operation).to receive(:execute).and_return(true).ordered
       end
 
@@ -93,6 +101,7 @@ describe Mongo::Retryable do
 
         before do
           expect(operation).to receive(:execute).and_raise(Mongo::Error::OperationFailure).ordered
+          allow(cluster).to receive(:servers).and_return([])
           expect(cluster).to receive(:sharded?).and_return(false)
         end
 
@@ -114,6 +123,7 @@ describe Mongo::Retryable do
           before do
             expect(operation).to receive(:execute).and_raise(error).ordered
             expect(cluster).to receive(:sharded?).and_return(true)
+            allow(cluster).to receive(:servers).and_return([])
           end
 
           it 'raises the exception' do
@@ -140,7 +150,7 @@ describe Mongo::Retryable do
             mock_connection = double(Mongo::Server::Connection)
             mock_server = double(Mongo::Server, :context => mock_context)
             expect(mock_context).to receive(:with_connection).and_yield(mock_connection)
-            expect(cluster).to receive(:servers).and_return([mock_server])
+            expect(cluster).to receive(:servers).at_least(:once).and_return([mock_server])
             expect(mock_connection).to receive(:authenticate!)
           end
 
@@ -163,6 +173,7 @@ describe Mongo::Retryable do
               expect(cluster).to receive(:max_read_retries).and_return(1).ordered
               expect(cluster).to receive(:read_retry_interval).and_return(0.1).ordered
               expect(operation).to receive(:execute).and_return(true).ordered
+              allow(cluster).to receive(:servers).and_return([])
             end
 
             it 'returns the result' do
@@ -182,6 +193,7 @@ describe Mongo::Retryable do
               expect(cluster).to receive(:max_read_retries).and_return(2).ordered
               expect(cluster).to receive(:read_retry_interval).and_return(0.1).ordered
               expect(operation).to receive(:execute).and_return(true).ordered
+              allow(cluster).to receive(:servers).and_return([])
             end
 
             it 'returns the result' do
@@ -222,7 +234,12 @@ describe Mongo::Retryable do
 
       before do
         expect(operation).to receive(:execute).and_raise(Mongo::Error::OperationFailure.new('not master')).ordered
+        allow(cluster).to receive(:servers).and_return([])
         expect(cluster).to receive(:scan!).and_return(true).ordered
+        expect(cluster).to receive(:disconnect!).and_return(true).ordered
+        expect(cluster).to receive(:max_read_retries).and_return(1).ordered
+        expect(cluster).to receive(:read_retry_interval).and_return(0.1).ordered
+
         expect(operation).to receive(:execute).and_return(true).ordered
       end
 

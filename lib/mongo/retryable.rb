@@ -23,6 +23,7 @@ module Mongo
     #
     # @since 2.1.0
     NOT_MASTER = 'not master'.freeze
+    RUNNER_DEAD = 'RUNNER_DEAD'.freeze
 
     # Execute a read operation with a retry.
     #
@@ -44,13 +45,17 @@ module Mongo
     def read_with_retry(attempt = 0, &block)
       begin
         block.call
-      rescue Error::SocketError, Error::SocketTimeoutError
-        retry_operation(&block)
-      rescue Error::OperationFailure => e
-        if cluster.sharded? && (e.retryable? || e.unauthorized?)
+      rescue Error::SocketError, Error::SocketTimeoutError, Error::OperationFailure => e
+        connection_error = e.kind_of?(Error::SocketError) || e.kind_of?(Error::SocketTimeoutError)
+        operation_failure = e.kind_of?(Error::OperationFailure)
+        if connection_error
+          rescan!
+        end
+        Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
+        if connection_error || (operation_failure && cluster.sharded? && (e.retryable? || e.unauthorized?))
           if attempt < cluster.max_read_retries
-            if e.unauthorized?
-              Mongo::Logger.logger.warn("[jontest] got unauthorized on #{cluster.servers.inspect}, re-authenticating")
+            if operation_failure && e.unauthorized?
+              Mongo::Logger.logger.warn("[jontest] got unauthorized for read on #{cluster.servers.inspect}, re-authenticating")
               cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate! } }
             end
 
@@ -85,25 +90,54 @@ module Mongo
     #
     # @since 2.1.0
     def write_with_retry(&block)
+      write_with_retry_helper(0, &block)
+    end
+
+    private
+    def rescan!
+      cluster.scan!
+      # Do a disconnect to force a reconnection to the cluster if we have connection problems
+      cluster.disconnect!
+    end
+
+    def write_with_retry_helper(attempt, &block)
       begin
         block.call
-      rescue Error::OperationFailure => e
-        if e.message.include?(NOT_MASTER)
-          retry_operation(&block)
-        elsif e.message.include?("RUNNER_DEAD")
-          Mongo::Logger.logger.warn("[jontest] got RUNNER_DEAD on #{cluster.servers.inspect}")
-          retry_operation(&block)
+      rescue Error::SocketError, Error::SocketTimeoutError, Error::OperationFailure => e
+        connection_error = e.kind_of?(Error::SocketError) || e.kind_of?(Error::SocketTimeoutError)
+        operation_failure = e.kind_of?(Error::OperationFailure)
+        runner_dead = e.message.include?(RUNNER_DEAD)
+        not_master = e.message.include?(NOT_MASTER)
+        if connection_error || runner_dead || not_master
+          if connection_error
+            Mongo::Logger.logger.warn("[jontest] got connection error in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          elsif runner_dead
+            Mongo::Logger.logger.warn("[jontest] got RUNNER_DEAD in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          elsif not_master
+            Mongo::Logger.logger.warn("[jontest] got not master in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          end
+          rescan!
+        end
+        if connection_error || (operation_failure && (e.retryable? || e.unauthorized?)) || runner_dead
+          # We're using max_read_retries here but if we got one of the errors that is causing us to be here, we should be retrying
+          # often anyway
+          if attempt < cluster.max_read_retries
+            if operation_failure && e.unauthorized?
+              Mongo::Logger.logger.warn("[jontest] got unauthorized for write on #{cluster.servers.inspect}, re-authenticating")
+              cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate! } }
+            end
+
+            # We don't scan the cluster in this case as Mongos always returns
+            # ready after a ping no matter what the state behind it is.
+            sleep(cluster.read_retry_interval)
+            write_with_retry_helper(attempt + 1, &block)
+          else
+            raise e
+          end
         else
           raise e
         end
       end
-    end
-
-    private
-
-    def retry_operation(&block)
-      cluster.scan!
-      block.call
     end
   end
 end
