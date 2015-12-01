@@ -14,26 +14,25 @@ describe Mongo::Server::Connection do
     Mongo::Event::Listeners.new
   end
 
+  let(:cluster) do
+    double('cluster')
+  end
+
   let(:server) do
-    Mongo::Server.new(address, double('cluster'), monitoring, listeners, TEST_OPTIONS)
+    Mongo::Server.new(address, cluster, monitoring, listeners, TEST_OPTIONS)
+  end
+
+  let(:pool) do
+    double('pool')
   end
 
   after do
+    expect(cluster).to receive(:pool).with(server).and_return(pool)
+    expect(pool).to receive(:disconnect!).and_return(true)
     server.disconnect!
   end
 
   describe '#connectable?' do
-
-    # context 'when the connection is connectable' do
-
-    #   let(:connection) do
-    #     described_class.new(server)
-    #   end
-
-    #   it 'returns true' do
-    #     expect(connection).to be_connectable
-    #   end
-    # end
 
     context 'when the connection is not connectable' do
 
@@ -42,7 +41,7 @@ describe Mongo::Server::Connection do
       end
 
       let(:bad_server) do
-        Mongo::Server.new(bad_address, double('cluster'), monitoring, listeners, TEST_OPTIONS)
+        Mongo::Server.new(bad_address, cluster, monitoring, listeners, TEST_OPTIONS)
       end
 
       let(:connection) do
@@ -237,6 +236,55 @@ describe Mongo::Server::Connection do
 
       it 'it dispatchs the message to the socket' do
         expect(reply.documents.first['ok']).to eq(1.0)
+      end
+    end
+
+    context 'when the message exceeds the max size' do
+
+      context 'when the message is an insert' do
+
+        before do
+          allow(connection).to receive(:max_message_size).and_return(200)
+        end
+
+        let(:documents) do
+          [{ 'name' => 'testing' } ] * 10
+        end
+
+        let(:reply) do
+          connection.dispatch([ insert ])
+        end
+
+        it 'checks the size against the max message size' do
+          expect {
+            reply
+          }.to raise_exception(Mongo::Error::MaxMessageSize)
+        end
+      end
+
+      context 'when the message is a command' do
+
+        before do
+          allow(connection).to receive(:max_bson_object_size).and_return(100)
+        end
+
+        let(:selector) do
+          { :getlasterror => '1' }
+        end
+
+        let(:command) do
+          Mongo::Protocol::Query.new(TEST_DB, '$cmd', selector, :limit => -1)
+        end
+
+        let(:reply) do
+          connection.dispatch([ command ])
+        end
+
+        it 'checks the size against the max bson size' do
+          expect {
+            reply
+          }.to raise_exception(Mongo::Error::MaxBSONSize)
+        end
       end
     end
 

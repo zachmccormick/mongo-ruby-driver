@@ -171,6 +171,15 @@ def failing_delete_doc
                            { que: { field: 'test' } }
 end
 
+# Try running a command on the admin database to see if the mongod was started with auth.
+#
+# @since 2.2.0
+def auth_enabled?
+  $mongo_client ||= initialize_scanned_client!
+  begin; $mongo_client.use(:admin).command(getCmdLineOpts: 1); rescue; return true; end
+  false
+end
+
 # Initializes a basic scanned client to do an ismaster check.
 #
 # @since 2.0.0
