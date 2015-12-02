@@ -56,7 +56,7 @@ module Mongo
           if attempt < cluster.max_read_retries
             if operation_failure && e.unauthorized?
               Mongo::Logger.logger.warn("[jontest] got unauthorized for read on #{cluster.servers.inspect}, re-authenticating")
-              cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate! } }
+              cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate!(server.options) } }
             end
 
             # We don't scan the cluster in this case as Mongos always returns
@@ -124,7 +124,7 @@ module Mongo
           if attempt < cluster.max_read_retries
             if operation_failure && e.unauthorized?
               Mongo::Logger.logger.warn("[jontest] got unauthorized for write on #{cluster.servers.inspect}, re-authenticating")
-              cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate! } }
+              cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate!(server.options) } }
             end
 
             # We don't scan the cluster in this case as Mongos always returns

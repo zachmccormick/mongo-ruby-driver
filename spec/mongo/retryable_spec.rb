@@ -151,6 +151,7 @@ describe Mongo::Retryable do
             mock_server = double(Mongo::Server, :context => mock_context)
             expect(mock_context).to receive(:with_connection).and_yield(mock_connection)
             expect(cluster).to receive(:servers).at_least(:once).and_return([mock_server])
+            allow(mock_server).to receive(:options)
             expect(mock_connection).to receive(:authenticate!)
           end
 

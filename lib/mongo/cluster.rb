@@ -13,6 +13,7 @@
 # limitations under the License.
 
 require 'mongo/cluster/topology'
+require 'mongo/shared_connection_pool'
 
 module Mongo
 
@@ -130,8 +131,10 @@ module Mongo
     # @since 2.2.0
     def self.finalize(pools)
       proc do
-        pools.values.each do |pool|
-          pool.disconnect!
+        if !share_connection?
+          pools.values.each do |pool|
+            pool.disconnect!
+          end
         end
       end
     end
@@ -201,9 +204,18 @@ module Mongo
     #
     # @since 2.2.0
     def pool(server)
-      @pool_lock.synchronize do
-        pools[server.address] ||= Server::ConnectionPool.get(server)
+      if share_connection?
+        Mongo::SharedConnectionPool.get(server)
+      else
+        @pool_lock.synchronize do
+          pools[server.address] ||= Server::ConnectionPool.get(server)
+        end
       end
+    end
+
+    # @return Whether or not this cluster should share an existing connection to the host:ip of the cluster
+    def share_connection?
+      options[:share_connection]
     end
 
     # Get the interval, in seconds, in which a mongos read operation is

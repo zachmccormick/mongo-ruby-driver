@@ -1,7 +1,6 @@
 require 'spec_helper'
 
 describe Mongo::Grid::FSBucket do
-
   let(:fs) do
     described_class.new(authorized_client.database, options)
   end

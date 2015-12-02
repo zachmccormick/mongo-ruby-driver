@@ -51,6 +51,7 @@ module Mongo
       :read_retry_interval,
       :replica_set,
       :server_selection_timeout,
+      :share_connection,
       :socket_timeout,
       :ssl,
       :ssl_ca_cert,

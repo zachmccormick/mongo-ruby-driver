@@ -42,6 +42,9 @@ module Mongo
       #   authenticator The authentication strategy.
       attr_reader :authenticator
 
+      # Stores booleans of which databases we have authenticated against
+      attr_reader :authentication_by_db
+
       def_delegators :@server,
                      :features,
                      :max_bson_object_size,
@@ -97,6 +100,7 @@ module Mongo
           socket.close
           @socket = nil
           @authenticated = false
+          @authentication_by_db = {}
         end
         true
       end
@@ -107,10 +111,12 @@ module Mongo
       #   connection.authenticate!
       #
       # @since 2.2.0
-      def authenticate!
-        if authenticator
+      def authenticate!(opts = nil)
+        needs_auth = setup_authentication!(opts)
+        if needs_auth && authenticator
           authenticator.login(self)
           @authenticated = true
+          @authentication_by_db[@authenticator.user.database] = true
         end
       end
 
@@ -161,6 +167,7 @@ module Mongo
         @ssl_options = options.reject { |k, v| !k.to_s.start_with?(SSL) }
         @socket = nil
         @pid = Process.pid
+        @authentication_by_db = {}
         setup_authentication!
       end
 
@@ -190,12 +197,16 @@ module Mongo
         messages.last.replyable? ? read : nil
       end
 
-      def setup_authentication!
-        if options[:user]
+      def setup_authentication!(opts = nil)
+        opts ||= options
+        if opts[:user]
           default_mechanism = @server.features.scram_sha_1_enabled? ? :scram : :mongodb_cr
-          user = Auth::User.new(Options::Redacted.new(:auth_mech => default_mechanism).merge(options))
+          user = Auth::User.new(Options::Redacted.new(:auth_mech => default_mechanism).merge(opts))
           @authenticator = Auth.get(user)
+          return true
         end
+
+        return false
       end
 
       def write(messages, buffer = BSON::ByteBuffer.new)
