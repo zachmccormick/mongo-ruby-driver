@@ -108,15 +108,16 @@ module Mongo
         operation_failure = e.kind_of?(Error::OperationFailure)
         runner_dead = e.message.include?(RUNNER_DEAD)
         not_master = e.message.include?(NOT_MASTER)
-        if connection_error || runner_dead || not_master
+        if connection_error || not_master
           if connection_error
             Mongo::Logger.logger.warn("[jontest] got connection error in write on #{cluster.servers.inspect}, attempt #{attempt}")
-          elsif runner_dead
-            Mongo::Logger.logger.warn("[jontest] got RUNNER_DEAD in write on #{cluster.servers.inspect}, attempt #{attempt}")
           elsif not_master
             Mongo::Logger.logger.warn("[jontest] got not master in write on #{cluster.servers.inspect}, attempt #{attempt}")
           end
           rescan!
+        end
+        if runner_dead
+          Mongo::Logger.logger.warn("[jontest] got RUNNER_DEAD in write on #{cluster.servers.inspect}, attempt #{attempt}")
         end
         if connection_error || (operation_failure && (e.retryable? || e.unauthorized?)) || runner_dead
           # We're using max_read_retries here but if we got one of the errors that is causing us to be here, we should be retrying
