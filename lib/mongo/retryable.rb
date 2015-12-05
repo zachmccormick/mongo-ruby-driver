@@ -23,6 +23,7 @@ module Mongo
     #
     # @since 2.1.0
     NOT_MASTER = 'not master'.freeze
+    NOT_CONTACT_PRIMARY = 'could not contact primary'.freeze
     RUNNER_DEAD = 'RUNNER_DEAD'.freeze
 
     # Execute a read operation with a retry.
@@ -107,7 +108,7 @@ module Mongo
         connection_error = e.kind_of?(Error::SocketError) || e.kind_of?(Error::SocketTimeoutError)
         operation_failure = e.kind_of?(Error::OperationFailure)
         runner_dead = e.message.include?(RUNNER_DEAD)
-        not_master = e.message.include?(NOT_MASTER)
+        not_master = e.message.include?(NOT_MASTER) || e.message.include?(NOT_CONTACT_PRIMARY)
         if connection_error || not_master
           if connection_error
             Mongo::Logger.logger.warn("[jontest] got connection error in write on #{cluster.servers.inspect}, attempt #{attempt}")
