@@ -52,7 +52,11 @@ module Mongo
         if connection_error
           rescan!
         end
-        Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
+        if operation_failure && cluster.sharded? && e.retryable?
+          Mongo::Logger.logger.info("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
+        else
+          Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
+        end
         if connection_error || (operation_failure && cluster.sharded? && (e.retryable? || e.unauthorized?))
           if attempt < cluster.max_read_retries
             if operation_failure && e.unauthorized?
