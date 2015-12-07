@@ -55,12 +55,12 @@ module Mongo
         if operation_failure && cluster.sharded? && e.retryable?
           Mongo::Logger.logger.info("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
         else
-          Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
+          Mongo::Logger.logger.info("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
         end
         if connection_error || (operation_failure && cluster.sharded? && (e.retryable? || e.unauthorized?))
           if attempt < cluster.max_read_retries
             if operation_failure && e.unauthorized?
-              Mongo::Logger.logger.warn("[jontest] got unauthorized for read on #{cluster.servers.inspect}, re-authenticating")
+              Mongo::Logger.logger.info("[jontest] got unauthorized for read on #{cluster.servers.inspect}, re-authenticating")
               cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate!(server.options) } }
             end
 
@@ -115,21 +115,21 @@ module Mongo
         not_master = e.message.include?(NOT_MASTER) || e.message.include?(NOT_CONTACT_PRIMARY)
         if connection_error || not_master
           if connection_error
-            Mongo::Logger.logger.warn("[jontest] got connection error in write on #{cluster.servers.inspect}, attempt #{attempt}")
+            Mongo::Logger.logger.info("[jontest] got connection error in write on #{cluster.servers.inspect}, attempt #{attempt}")
           elsif not_master
-            Mongo::Logger.logger.warn("[jontest] got not master in write on #{cluster.servers.inspect}, attempt #{attempt}")
+            Mongo::Logger.logger.info("[jontest] got not master in write on #{cluster.servers.inspect}, attempt #{attempt}")
           end
           rescan!
         end
         if runner_dead
-          Mongo::Logger.logger.warn("[jontest] got RUNNER_DEAD in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          Mongo::Logger.logger.info("[jontest] got RUNNER_DEAD in write on #{cluster.servers.inspect}, attempt #{attempt}")
         end
         if connection_error || (operation_failure && (e.retryable? || e.unauthorized?)) || runner_dead
           # We're using max_read_retries here but if we got one of the errors that is causing us to be here, we should be retrying
           # often anyway
           if attempt < cluster.max_read_retries
             if operation_failure && e.unauthorized?
-              Mongo::Logger.logger.warn("[jontest] got unauthorized for write on #{cluster.servers.inspect}, re-authenticating")
+              Mongo::Logger.logger.info("[jontest] got unauthorized for write on #{cluster.servers.inspect}, re-authenticating")
               cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate!(server.options) } }
             end
 
