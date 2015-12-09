@@ -100,7 +100,8 @@ module Mongo
 
     private
     def rescan!
-      cluster.scan!
+      # Don't scan because it will issue an ismaster, which can hang, just go ahead and disconnect
+      # cluster.scan!
       # Do a disconnect to force a reconnection to the cluster if we have connection problems
       cluster.disconnect!
     end
