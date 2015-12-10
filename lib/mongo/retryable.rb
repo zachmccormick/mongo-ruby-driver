@@ -123,7 +123,7 @@ module Mongo
           rescan!
         end
         if runner_dead
-          Mongo::Logger.logger.warn("[jontest] got RUNNER_DEAD in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          Mongo::Logger.logger.info("[jontest] got RUNNER_DEAD in write on #{cluster.servers.inspect}, attempt #{attempt}")
         end
         if connection_error || (operation_failure && (e.retryable? || e.unauthorized?)) || runner_dead
           # We're using max_read_retries here but if we got one of the errors that is causing us to be here, we should be retrying
