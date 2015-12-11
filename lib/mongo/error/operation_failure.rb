@@ -37,7 +37,8 @@ module Mongo
         'error querying',
         'could not get last error',
         'connection attempt failed',
-        'interrupted at shutdown'
+        'interrupted at shutdown',
+        'no progress was made executing batch write op'
       ].freeze
 
       UNAUTHORIZED_MESSAGES = [

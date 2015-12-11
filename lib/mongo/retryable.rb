@@ -53,7 +53,7 @@ module Mongo
           rescan!
         end
         if operation_failure && cluster.sharded? && e.retryable?
-          Mongo::Logger.logger.info("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
+          Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
         else
           Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
         end
@@ -114,11 +114,14 @@ module Mongo
         operation_failure = e.kind_of?(Error::OperationFailure)
         runner_dead = e.message.include?(RUNNER_DEAD)
         not_master = e.message.include?(NOT_MASTER) || e.message.include?(NOT_CONTACT_PRIMARY)
-        if connection_error || not_master
+        batch_write = e.message.include?('no progress was made executing batch write op'.freeze)
+        if connection_error || not_master || batch_write
           if connection_error
             Mongo::Logger.logger.warn("[jontest] got connection error in write on #{cluster.servers.inspect}, attempt #{attempt}")
           elsif not_master
             Mongo::Logger.logger.warn("[jontest] got not master in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          elsif batch_write
+            Mongo::Logger.logger.warn("[jontest] got batch write failure in write on #{cluster.servers.inspect}, attempt #{attempt}")
           end
           rescan!
         end
