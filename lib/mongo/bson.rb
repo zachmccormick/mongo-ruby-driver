@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2015 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,10 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-module Mongo
+# Patch for allowing deprecated symbols to be used.
+#
+# @since 2.2.1
+class Symbol
 
-  # The current version of the driver.
+  # Overrides the default BSON type to use the symbol type instead of a
+  # string type.
   #
-  # @since 2.0.0
-  VERSION = '2.2.1'.freeze
+  # @example Get the bson type.
+  #   :test.bson_type
+  #
+  # @return [ String ] The charater 14.
+  #
+  # @since 2.2.1
+  def bson_type
+    BSON::Symbol::BSON_TYPE
+  end
 end
