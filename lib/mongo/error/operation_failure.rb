@@ -38,7 +38,8 @@ module Mongo
         'could not get last error',
         'connection attempt failed',
         'interrupted at shutdown',
-        'no progress was made executing batch write op'
+        'no progress was made executing batch write op',
+        'unknown replica set'
       ].freeze
 
       UNAUTHORIZED_MESSAGES = [
