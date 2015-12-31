@@ -38,10 +38,6 @@ module Mongo
       # @since 2.1.0
       PING_BYTES = PING_MESSAGE.serialize.to_s.freeze
 
-      # @return [ Mongo::Auth::CR, Mongo::Auth::X509, Mongo::Auth:LDAP, Mongo::Auth::SCRAM ]
-      #   authenticator The authentication strategy.
-      attr_reader :authenticator
-
       # Stores booleans of which databases we have authenticated against
       attr_reader :authentication_by_db
 
@@ -50,19 +46,6 @@ module Mongo
                      :max_bson_object_size,
                      :max_message_size,
                      :mongos?
-
-      # Is this connection authenticated. Will return true if authorization
-      # details were provided and authentication passed.
-      #
-      # @example Is the connection authenticated?
-      #   connection.authenticated?
-      #
-      # @return [ true, false ] If the connection is authenticated.
-      #
-      # @since 2.0.0
-      def authenticated?
-        !!@authenticated
-      end
 
       # Tell the underlying socket to establish a connection to the host.
       #
@@ -113,8 +96,8 @@ module Mongo
       # @since 2.2.0
       def authenticate!(opts = nil)
         needs_auth = setup_authentication!(opts)
-        if needs_auth && authenticator
-          authenticator.login(self)
+        if needs_auth && @authenticator
+          @authenticator.login(self)
           @authenticated = true
           @authentication_by_db[@authenticator.user.database] = true
         end
@@ -185,7 +168,7 @@ module Mongo
       def ping
         ensure_connected do |socket|
           socket.write(PING_BYTES)
-          reply = Protocol::Reply.deserialize(socket)
+          reply = Protocol::Reply.deserialize(socket, max_message_size)
           reply.documents[0][Operation::Result::OK] == 1
         end
       end
