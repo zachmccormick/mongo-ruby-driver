@@ -40,7 +40,8 @@ module Mongo
         'interrupted at shutdown',
         'no progress was made executing batch write op',
         'unknown replica set',
-        'dbclient error communicating with server'
+        'dbclient error communicating with server',
+        'Failed to call say, no good nodes'
       ].freeze
 
       UNAUTHORIZED_MESSAGES = [
