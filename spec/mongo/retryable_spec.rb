@@ -135,28 +135,61 @@ describe Mongo::Retryable do
 
         context 'when there is an authentication failure' do
 
-          let(:error) do
-            Mongo::Error::OperationFailure.new('not authorized')
+          context 'when it comes in via an OperationFailure' do
+
+            let(:error) do
+              Mongo::Error::OperationFailure.new('not authorized')
+            end
+
+            before do
+              expect(operation).to receive(:execute).and_raise(error).ordered
+              allow(cluster).to receive(:sharded?).and_return(true)
+              expect(cluster).to receive(:max_read_retries).and_return(1).ordered
+              expect(cluster).to receive(:read_retry_interval).and_return(0.1).ordered
+              expect(operation).to receive(:execute).and_return(true).ordered
+
+              mock_context = double(Mongo::Server::Context)
+              mock_connection = double(Mongo::Server::Connection)
+              mock_server = double(Mongo::Server, :context => mock_context)
+              expect(mock_context).to receive(:with_connection).and_yield(mock_connection)
+              expect(cluster).to receive(:servers).at_least(:once).and_return([mock_server])
+              allow(mock_server).to receive(:options)
+              expect(mock_connection).to receive(:authenticate!)
+            end
+
+            it 're-authenticates and retries the operation' do
+              expect(retryable.read).to be true
+            end
           end
 
-          before do
-            expect(operation).to receive(:execute).and_raise(error).ordered
-            allow(cluster).to receive(:sharded?).and_return(true)
-            expect(cluster).to receive(:max_read_retries).and_return(1).ordered
-            expect(cluster).to receive(:read_retry_interval).and_return(0.1).ordered
-            expect(operation).to receive(:execute).and_return(true).ordered
+          context 'when it comes in via a Mongo::Auth::Unauthorized' do
 
-            mock_context = double(Mongo::Server::Context)
-            mock_connection = double(Mongo::Server::Connection)
-            mock_server = double(Mongo::Server, :context => mock_context)
-            expect(mock_context).to receive(:with_connection).and_yield(mock_connection)
-            expect(cluster).to receive(:servers).at_least(:once).and_return([mock_server])
-            allow(mock_server).to receive(:options)
-            expect(mock_connection).to receive(:authenticate!)
-          end
+            let(:error) do
+              Struct.new("UnauthorizedTestUser", :name, :database)
+              bad_user = Struct::UnauthorizedTestUser.new("foo", "test")
+              Mongo::Auth::Unauthorized.new(bad_user)
+            end
 
-          it 're-authenticates and retries the operation' do
-            expect(retryable.read).to be true
+            before do
+              expect(operation).to receive(:execute).and_raise(error).ordered
+              allow(cluster).to receive(:sharded?).and_return(true)
+              expect(cluster).to receive(:disconnect!).ordered
+              allow(cluster).to receive(:max_read_retries).and_return(1)
+              expect(cluster).to receive(:read_retry_interval).and_return(0.1).ordered
+              expect(operation).to receive(:execute).and_return(true).ordered
+
+              mock_context = double(Mongo::Server::Context)
+              mock_connection = double(Mongo::Server::Connection)
+              mock_server = double(Mongo::Server, :context => mock_context)
+              expect(mock_context).to receive(:with_connection).and_yield(mock_connection)
+              expect(cluster).to receive(:servers).at_least(:once).and_return([mock_server])
+              allow(mock_server).to receive(:options)
+              expect(mock_connection).to receive(:authenticate!)
+            end
+
+            it 're-authenticates and retries the operation' do
+              expect(retryable.read).to be true
+            end
           end
         end
 
