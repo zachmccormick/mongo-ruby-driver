@@ -84,6 +84,7 @@ module Mongo
           @socket = nil
           @authenticated = false
           @authentication_by_db = {}
+          @in_auth_process = {}
         end
         true
       end
@@ -96,10 +97,15 @@ module Mongo
       # @since 2.2.0
       def authenticate!(opts = nil)
         needs_auth = setup_authentication!(opts)
-        if needs_auth && @authenticator
+        if needs_auth && @authenticator && !@in_auth_process[@authenticator.user.database]
+          # Keep track of whether or not we are authenticating against a specific database, as the
+          # monitoring lass will get called by @authenticator.login(self) and we don't want to auth more than once
+          # on this connection, as Context.with_connection is now tightly coupled to auth
+          @in_auth_process[@authenticator.user.database] = true
           @authenticator.login(self)
           @authenticated = true
           @authentication_by_db[@authenticator.user.database] = true
+          @in_auth_process[@authenticator.user.database] = false
         end
       end
 
@@ -151,6 +157,7 @@ module Mongo
         @socket = nil
         @pid = Process.pid
         @authentication_by_db = {}
+        @in_auth_process = {}
         setup_authentication!
       end
 
