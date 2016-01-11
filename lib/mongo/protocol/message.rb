@@ -110,7 +110,12 @@ module Mongo
       #
       # @return [ Message ] Instance of a Message class
       def self.deserialize(io, max_message_size = MAX_MESSAGE_SIZE)
-        length = deserialize_header(BSON::ByteBuffer.new(io.read(16))).first
+        read = BSON::ByteBuffer.new(io.read(16))
+        length = deserialize_header(read).first
+
+        if length.nil?
+          Mongo::Logger.logger.error("[jontest] deserialize has null length, read is #{read}, #{@length}, #{@request_id}, #{@response_to}, #{@op_code}")
+        end
 
         # Protection from potential DOS man-in-the-middle attacks. See
         # DRIVERS-276.
