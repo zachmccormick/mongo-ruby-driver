@@ -117,6 +117,11 @@ module Mongo
           Mongo::Logger.logger.error("[jontest] deserialize has null length, read is #{read}, #{@length}, #{@request_id}, #{@response_to}, #{@op_code}")
         end
 
+        if max_message_size.nil?
+          max_message_size = MAX_MESSAGE_SIZE
+          Mongo::Logger.logger.error("[jontest] max message size is nil, #{@length}, #{@request_id}, #{@response_to}, #{@op_code}")
+        end
+
         # Protection from potential DOS man-in-the-middle attacks. See
         # DRIVERS-276.
         if length > max_message_size
