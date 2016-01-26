@@ -122,13 +122,16 @@ module Mongo
         runner_dead = e.message.include?(RUNNER_DEAD)
         not_master = e.message.include?(NOT_MASTER) || e.message.include?(NOT_CONTACT_PRIMARY)
         batch_write = e.message.include?('no progress was made executing batch write op'.freeze)
-        if connection_error || not_master || batch_write || no_server_available || auth_error
+        write_unavailable = e.message.include?('write results unavailable'.freeze)
+        if connection_error || not_master || batch_write || no_server_available || auth_error || write_unavailable
           if connection_error
             Mongo::Logger.logger.warn("[jontest] got connection error in write on #{cluster.servers.inspect}, attempt #{attempt}")
           elsif not_master
             Mongo::Logger.logger.warn("[jontest] got not master in write on #{cluster.servers.inspect}, attempt #{attempt}")
           elsif batch_write
             Mongo::Logger.logger.warn("[jontest] got batch write failure in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          elsif write_unavailable
+            Mongo::Logger.logger.warn("[jontest] got write unavailable in write on #{cluster.servers.inspect}, attempt #{attempt}")
           elsif no_server_available
             Mongo::Logger.logger.warn("[jontest] got no server available in write on #{cluster.servers.inspect}, will retry one more time")
             attempt = cluster.max_read_retries - 1
