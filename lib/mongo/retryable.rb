@@ -50,7 +50,7 @@ module Mongo
         connection_error = e.kind_of?(Error::SocketError) || e.kind_of?(Error::SocketTimeoutError)
         operation_failure = e.kind_of?(Error::OperationFailure)
         auth_error = e.kind_of?(Mongo::Auth::Unauthorized)
-        if connection_error || auth_error
+        if connection_error || auth_error || (operation_failure && e.unauthorized?)
           rescan!
         end
         # Retry up to one time for an auth error
