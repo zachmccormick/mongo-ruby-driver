@@ -53,9 +53,9 @@ module Mongo
         if connection_error || auth_error || (operation_failure && e.unauthorized?)
           rescan!
         end
-        # Retry up to one time for an auth error
+        # Retry up to ten times for an auth error
         if auth_error
-          attempt = cluster.max_read_retries - 1
+          attempt = cluster.max_read_retries - 10
         end
         if operation_failure && cluster.sharded? && e.retryable?
           Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
@@ -135,9 +135,9 @@ module Mongo
           elsif no_server_available
             Mongo::Logger.logger.warn("[jontest] got no server available in write on #{cluster.servers.inspect}, will retry one more time")
             attempt = cluster.max_read_retries - 1
-          # Retry up to one time for an auth error
+          # Retry up to ten more times for an auth error
           elsif auth_error
-            attempt = cluster.max_read_retries - 1
+            attempt = cluster.max_read_retries - 10
           end
           rescan!
         end
