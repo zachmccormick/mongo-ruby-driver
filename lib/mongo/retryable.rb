@@ -53,10 +53,6 @@ module Mongo
         if connection_error || auth_error || (operation_failure && e.unauthorized?)
           rescan!
         end
-        # Retry up to ten times for an auth error
-        if auth_error
-          attempt = cluster.max_read_retries - 10
-        end
         if operation_failure && cluster.sharded? && e.retryable?
           Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
         else
@@ -66,7 +62,12 @@ module Mongo
           if attempt < cluster.max_read_retries
             if (operation_failure && e.unauthorized?) || auth_error
               Mongo::Logger.logger.warn("[jontest] got unauthorized for read on #{cluster.servers.inspect}, re-authenticating, attempt is #{attempt}, #{e.inspect()}")
-              cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate!(server.options) } }
+              begin
+                cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate!(server.options) } }
+              rescue Mongo::Auth::Unauthorized
+                # Disconnect before we retry again
+                rescan!
+              end
             end
 
             # We don't scan the cluster in this case as Mongos always returns
@@ -135,9 +136,6 @@ module Mongo
           elsif no_server_available
             Mongo::Logger.logger.warn("[jontest] got no server available in write on #{cluster.servers.inspect}, will retry one more time")
             attempt = cluster.max_read_retries - 1
-          # Retry up to ten more times for an auth error
-          elsif auth_error
-            attempt = cluster.max_read_retries - 10
           end
           rescan!
         end
@@ -150,7 +148,12 @@ module Mongo
           if attempt < cluster.max_read_retries
             if (operation_failure && e.unauthorized?) || auth_error
               Mongo::Logger.logger.warn("[jontest] got unauthorized for write on #{cluster.servers.inspect}, re-authenticating, attempt is #{attempt}, #{e.inspect()}")
-              cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate!(server.options) } }
+              begin
+                cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate!(server.options) } }
+              rescue Mongo::Auth::Unauthorized
+                # Disconnect before we retry again
+                rescan!
+              end
             end
 
             # We don't scan the cluster in this case as Mongos always returns
