@@ -50,7 +50,8 @@ module Mongo
         connection_error = e.kind_of?(Error::SocketError) || e.kind_of?(Error::SocketTimeoutError)
         operation_failure = e.kind_of?(Error::OperationFailure)
         auth_error = e.kind_of?(Mongo::Auth::Unauthorized)
-        if connection_error || auth_error || (operation_failure && e.unauthorized?)
+        assertion_256 = operation_failure && e.message.include?("assertion src/mongo/util/net/message.h:256")
+        if connection_error || auth_error || (operation_failure && e.unauthorized?) || assertion_256
           rescan!
         end
         if operation_failure && cluster.sharded? && e.retryable?
@@ -124,7 +125,8 @@ module Mongo
         not_master = e.message.include?(NOT_MASTER) || e.message.include?(NOT_CONTACT_PRIMARY)
         batch_write = e.message.include?('no progress was made executing batch write op'.freeze)
         write_unavailable = e.message.include?('write results unavailable'.freeze)
-        if connection_error || not_master || batch_write || no_server_available || auth_error || write_unavailable
+        assertion_256 = operation_failure && e.message.include?("assertion src/mongo/util/net/message.h:256")
+        if connection_error || not_master || batch_write || no_server_available || auth_error || write_unavailable || assertion_256
           if connection_error
             Mongo::Logger.logger.warn("[jontest] got connection error in write on #{cluster.servers.inspect}, attempt #{attempt}")
           elsif not_master
@@ -136,6 +138,8 @@ module Mongo
           elsif no_server_available
             Mongo::Logger.logger.warn("[jontest] got no server available in write on #{cluster.servers.inspect}, will retry one more time")
             attempt = cluster.max_read_retries - 1
+          elsif assertion_256
+            Mongo::Logger.logger.warn("[jontest] got assertion message.h 256 failure on #{cluster.servers.inspect}")
           end
           rescan!
         end

@@ -41,7 +41,8 @@ module Mongo
         'no progress was made executing batch write op',
         'unknown replica set',
         'dbclient error communicating with server',
-        'Failed to call say, no good nodes'
+        'Failed to call say, no good nodes',
+        'assertion src/mongo/util/net/message.h:256'
       ].freeze
 
       UNAUTHORIZED_MESSAGES = [
