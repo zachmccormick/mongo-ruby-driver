@@ -51,9 +51,15 @@ module Mongo
         operation_failure = e.kind_of?(Error::OperationFailure)
         auth_error = e.kind_of?(Mongo::Auth::Unauthorized)
         assertion_256 = operation_failure && e.message.include?("assertion src/mongo/util/net/message.h:256")
+        sleep_multiplier = 1
         if connection_error || auth_error || (operation_failure && e.unauthorized?) || assertion_256
           rescan!
         end
+
+        if (operation_failure && e.unauthorized?) || auth_error
+          sleep_multiplier = 2
+        end
+
         if operation_failure && cluster.sharded? && e.retryable?
           Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}")
         else
@@ -67,13 +73,14 @@ module Mongo
                 cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate!(server.options) } }
               rescue Mongo::Auth::Unauthorized
                 # Disconnect before we retry again
+                sleep_multiplier = 2
                 rescan!
               end
             end
 
             # We don't scan the cluster in this case as Mongos always returns
             # ready after a ping no matter what the state behind it is.
-            sleep(cluster.read_retry_interval)
+            sleep(cluster.read_retry_interval * sleep_multiplier)
             read_with_retry(attempt + 1, &block)
           else
             raise e
@@ -126,6 +133,7 @@ module Mongo
         batch_write = e.message.include?('no progress was made executing batch write op'.freeze)
         write_unavailable = e.message.include?('write results unavailable'.freeze)
         assertion_256 = operation_failure && e.message.include?("assertion src/mongo/util/net/message.h:256")
+        sleep_multiplier = 1
         if connection_error || not_master || batch_write || no_server_available || auth_error || write_unavailable || assertion_256
           if connection_error
             Mongo::Logger.logger.warn("[jontest] got connection error in write on #{cluster.servers.inspect}, attempt #{attempt}")
@@ -146,6 +154,11 @@ module Mongo
         if runner_dead
           Mongo::Logger.logger.info("[jontest] got RUNNER_DEAD in write on #{cluster.servers.inspect}, attempt #{attempt}")
         end
+
+        if (operation_failure && e.unauthorized?) || auth_error
+          sleep_multiplier = 2
+        end
+
         if connection_error || (operation_failure && (e.retryable? || e.unauthorized?)) || runner_dead || no_server_available || auth_error || write_unavailable
           # We're using max_read_retries here but if we got one of the errors that is causing us to be here, we should be retrying
           # often anyway
@@ -155,6 +168,7 @@ module Mongo
               begin
                 cluster.servers.each {|server| server.context.with_connection {|conn| conn.authenticate!(server.options) } }
               rescue Mongo::Auth::Unauthorized
+                sleep_multiplier = 2
                 # Disconnect before we retry again
                 rescan!
               end
@@ -162,7 +176,7 @@ module Mongo
 
             # We don't scan the cluster in this case as Mongos always returns
             # ready after a ping no matter what the state behind it is.
-            sleep(cluster.read_retry_interval)
+            sleep(cluster.read_retry_interval * sleep_multiplier)
             write_with_retry_helper(attempt + 1, &block)
           else
             raise e
