@@ -96,16 +96,22 @@ module Mongo
       #
       # @since 2.2.0
       def authenticate!(opts = nil)
-        needs_auth = setup_authentication!(opts)
-        if needs_auth && @authenticator && !@in_auth_process[@authenticator.user.database]
+        # The only place where authenticate! is called with nil options is in the connect! phase, but we don't want
+        # to authenticate if we have previously authenticated from a Context#with_connection
+        if opts.nil? && @in_auth_process.values.any? {|v| v}
+          return
+        end
+
+        needs_auth, authenticator = setup_authentication!(opts)
+        if needs_auth && authenticator && !@in_auth_process[authenticator.user.database]
           # Keep track of whether or not we are authenticating against a specific database, as the
           # monitoring lass will get called by @authenticator.login(self) and we don't want to auth more than once
           # on this connection, as Context.with_connection is now tightly coupled to auth
-          @in_auth_process[@authenticator.user.database] = true
-          @authenticator.login(self)
+          @in_auth_process[authenticator.user.database] = true
+          authenticator.login(self)
           @authenticated = true
-          @authentication_by_db[@authenticator.user.database] = true
-          @in_auth_process[@authenticator.user.database] = false
+          @authentication_by_db[authenticator.user.database] = true
+          @in_auth_process[authenticator.user.database] = false
         end
       end
 
@@ -192,11 +198,11 @@ module Mongo
         if opts[:user]
           default_mechanism = @server.features.scram_sha_1_enabled? ? :scram : :mongodb_cr
           user = Auth::User.new(Options::Redacted.new(:auth_mech => default_mechanism).merge(opts))
-          @authenticator = Auth.get(user)
-          return true
+          authenticator = Auth.get(user)
+          return true, authenticator
         end
 
-        return false
+        return false, nil
       end
 
       def write(messages, buffer = BSON::ByteBuffer.new)
