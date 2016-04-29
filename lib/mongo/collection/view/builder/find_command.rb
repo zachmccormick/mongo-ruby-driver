@@ -43,6 +43,7 @@ module Mongo
             show_disk_loc: 'showRecordId',
             snapshot: 'snapshot',
             tailable: 'tailable',
+            tailable_cursor: 'tailable',
             oplog_replay: 'oplogReplay',
             no_cursor_timeout: 'noCursorTimeout',
             await_data: 'awaitData',
@@ -93,16 +94,25 @@ module Mongo
 
           def find_command
             document = BSON::Document.new('find' => collection.name, 'filter' => filter)
-            command = Options::Mapper.transform_documents(options, MAPPINGS, document)
+            command = Options::Mapper.transform_documents(convert_flags(options), MAPPINGS, document)
             convert_negative_limit(command)
           end
 
           def convert_negative_limit(command)
             if command[:limit] && command[:limit] < 0
-              command.delete('limit')
+              command['limit'] = command['limit'].abs
               command[:singleBatch] = true
             end
             command
+          end
+
+          def convert_flags(options)
+            return options if options.empty?
+            opts = options.dup
+            opts.delete(:cursor_type)
+            Flags.map_flags(options).reduce(opts) do |opts, key|
+              opts.merge!(key => true)
+            end
           end
         end
       end

@@ -68,6 +68,7 @@ module Mongo
                 end
               end
               update_max_election_id(description)
+              update_max_set_version(description)
             end
           else
             log_warn(
@@ -88,7 +89,8 @@ module Mongo
         # @since 2.0.0
         def initialize(options, seeds = [])
           @options = options
-          @max_election_id = 0
+          @max_election_id = nil
+          @max_set_version = nil
         end
 
         # A replica set topology is a replica set.
@@ -142,7 +144,8 @@ module Mongo
         #
         # @since 2.0.6
         def add_hosts?(description, servers)
-          !!(member_of_this_set?(description) && !has_primary?(servers))
+          !!(member_of_this_set?(description) &&
+              (!has_primary?(servers) || description.primary?))
         end
 
         # Whether a description can be used to remove hosts from the cluster.
@@ -222,14 +225,29 @@ module Mongo
         private
 
         def update_max_election_id(description)
-          if description.election_id && description.election_id > @max_election_id
+          if description.election_id &&
+              (@max_election_id.nil? ||
+                  description.election_id > @max_election_id)
             @max_election_id = description.election_id
           end
         end
 
+        def update_max_set_version(description)
+          if description.set_version &&
+              (@max_set_version.nil? ||
+                  description.set_version > @max_set_version)
+            @max_set_version = description.set_version
+          end
+        end
+
         def detect_stale_primary!(description)
-          if description.election_id && description.election_id < @max_election_id
-            description.unknown!
+          if description.election_id && description.set_version
+            if @max_set_version && @max_election_id &&
+                (description.set_version < @max_set_version ||
+                    (description.set_version == @max_set_version &&
+                        description.election_id < @max_election_id))
+              description.unknown!
+            end
           end
         end
 

@@ -82,9 +82,8 @@ module Mongo
           def write(io)
             ensure_open!
             @indexes ||= ensure_indexes!
-            data = io.read
-            @length += data.length
-            chunks = File::Chunk.split(data, file_info, @n)
+            @length += io.size
+            chunks = File::Chunk.split(io, file_info, @n)
             @n += chunks.size
             chunks_collection.insert_many(chunks) unless chunks.empty?
             self
@@ -157,10 +156,11 @@ module Mongo
           end
 
           def with_write_concern(collection)
-            if collection.write_concern.options == write_concern.options
+            if write_concern.nil? || (collection.write_concern &&
+                collection.write_concern.options == write_concern.options)
               collection
             else
-              collection.client.with(write: write_concern.options)[collection.name]
+              collection.with(write: write_concern.options)
             end
           end
 
