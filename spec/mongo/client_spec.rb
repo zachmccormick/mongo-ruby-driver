@@ -2,14 +2,6 @@ require 'spec_helper'
 
 describe Mongo::Client do
 
-  before do
-    if running_ssl?
-      allow_any_instance_of(Mongo::Server::Monitor).to receive(:ismaster) do
-        [{}, 1]
-      end
-    end
-  end
-
   describe '#==' do
 
     let(:client) do
@@ -482,7 +474,7 @@ describe Mongo::Client do
     context 'when the read preference is printed' do
 
       let(:client) do
-        described_class.new([ DEFAULT_ADDRESS ], options)
+        described_class.new([ default_address.to_s ], options)
       end
 
       let(:options) do

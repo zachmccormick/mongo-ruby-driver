@@ -28,11 +28,6 @@ TEST_COLL = 'test'.freeze
 ADDRESSES = ENV['MONGODB_ADDRESSES'] ? ENV['MONGODB_ADDRESSES'].split(',').freeze :
               [ '127.0.0.1:27017' ].freeze
 
-# A default address to use in tests.
-#
-# @since 2.0.0
-DEFAULT_ADDRESS = ADDRESSES.first
-
 # The topology type.
 #
 # @since 2.0.0
@@ -65,7 +60,9 @@ SSL_OPTIONS = {
 # @since 2.1.0
 BASE_OPTIONS = {
                   max_pool_size: 1,
-                  write: WRITE_CONCERN
+                  write: WRITE_CONCERN,
+                  heartbeat_frequency: 5,
+                  max_read_retries: 5
                }
 
 # Options for test suite clients.
@@ -244,6 +241,13 @@ module Authorization
     # @since 2.0.0
     context.let(:unauthorized_primary) do
       authorized_client.cluster.next_primary
+    end
+
+    # Get a default address (of the primary).
+    #
+    # @since 2.2.6
+    context.let(:default_address) do
+      authorized_client.cluster.next_primary.address
     end
   end
 end

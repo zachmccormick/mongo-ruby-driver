@@ -21,6 +21,7 @@ module Mongo
     class Connection
       include Connectable
       include Monitoring::Publishable
+      include Retryable
       extend Forwardable
 
       # The ping command.
@@ -65,6 +66,9 @@ module Mongo
           authenticate!
         end
         true
+      rescue Mongo::Auth::Unauthorized => e
+        disconnect!
+        raise e
       end
 
       # Disconnect the connection.
@@ -190,7 +194,7 @@ module Mongo
 
       def deliver(messages)
         write(messages)
-        messages.last.replyable? ? read : nil
+        messages.last.replyable? ? read(messages.last.request_id) : nil
       end
 
       def setup_authentication!(opts = nil)
@@ -203,6 +207,19 @@ module Mongo
         end
 
         return false, nil
+      end
+
+      def default_mechanism
+        if socket && socket.connectable?
+          socket.write(Monitor::Connection::ISMASTER_BYTES)
+          ismaster = Protocol::Reply.deserialize(socket, max_message_size).documents[0]
+          min_wire_version = ismaster[Description::MIN_WIRE_VERSION] || Description::LEGACY_WIRE_VERSION
+          max_wire_version = ismaster[Description::MAX_WIRE_VERSION] || Description::LEGACY_WIRE_VERSION
+          features = Description::Features.new(min_wire_version..max_wire_version)
+          (features.scram_sha_1_enabled? || @server.features.scram_sha_1_enabled?) ? :scram : :mongodb_cr
+        else
+          @server.features.scram_sha_1_enabled? ? :scram : :mongodb_cr
+        end
       end
 
       def write(messages, buffer = BSON::ByteBuffer.new)

@@ -3,7 +3,7 @@ require 'spec_helper'
 describe Mongo::Server::Monitor do
 
   let(:address) do
-    Mongo::Address.new(DEFAULT_ADDRESS)
+    default_address
   end
 
   let(:listeners) do
@@ -23,6 +23,36 @@ describe Mongo::Server::Monitor do
         monitor.scan!
         monitor.scan!
         expect(Time.now - start).to be >= 0.5
+      end
+    end
+
+    context 'when the ismaster fails the first time' do
+
+      let(:monitor) do
+        described_class.new(address, listeners, TEST_OPTIONS)
+      end
+
+      let(:socket) do
+        monitor.connection.connect!
+        monitor.connection.__send__(:socket)
+      end
+
+      before do
+        expect(socket).to receive(:write).once.and_raise(Mongo::Error::SocketError)
+        expect(socket).to receive(:write).and_call_original
+        monitor.scan!
+      end
+
+      it 'retries the ismaster', if: standalone? do
+        expect(monitor.description).to be_standalone
+      end
+
+      it 'retries the ismaster', if: replica_set? do
+        expect(monitor.description).to be_primary
+      end
+
+      it 'retries the ismaster', if: sharded? do
+        expect(monitor.description).to be_mongos
       end
     end
 
@@ -73,7 +103,7 @@ describe Mongo::Server::Monitor do
       context 'when the socket gets an exception' do
 
         let(:bad_address) do
-          Mongo::Address.new(DEFAULT_ADDRESS)
+          default_address
         end
 
         let(:monitor) do
@@ -86,7 +116,7 @@ describe Mongo::Server::Monitor do
         end
 
         before do
-          expect(socket).to receive(:write).and_raise(Mongo::Error::SocketError)
+          expect(socket).to receive(:write).twice.and_raise(Mongo::Error::SocketError)
           monitor.scan!
         end
 
@@ -120,7 +150,7 @@ describe Mongo::Server::Monitor do
         described_class.new(address, listeners)
       end
 
-      it 'defaults to 5' do
+      it 'defaults to 10' do
         expect(monitor.heartbeat_frequency).to eq(10)
       end
     end

@@ -3,7 +3,7 @@ require 'spec_helper'
 describe Mongo::Server::Connection do
 
   let(:address) do
-    Mongo::Address.new(DEFAULT_ADDRESS)
+    default_address
   end
 
   let(:monitoring) do
@@ -117,10 +117,21 @@ describe Mongo::Server::Connection do
           )
         end
 
+        let!(:error) do
+          e = begin; connection.send(:ensure_connected); rescue => ex; ex; end
+        end
+
         it 'raises an error' do
-          expect {
-            connection.connect!
-          }.to raise_error(Mongo::Auth::Unauthorized)
+          expect(error).to be_a(Mongo::Auth::Unauthorized)
+        end
+
+        it 'disconnects the socket' do
+          expect(connection.send(:socket)).to be(nil)
+        end
+
+        it 'marks the server as unknown' do
+          pending 'Server must be set as unknown'
+          expect(server).to be_unknown
         end
       end
 
@@ -238,6 +249,89 @@ describe Mongo::Server::Connection do
         expect(reply.documents.first['ok']).to eq(1.0)
       end
     end
+
+    context 'when the response_to does not match the request_id' do
+
+      let(:documents) do
+        [{ 'name' => 'bob' }, { 'name' => 'alice' }]
+      end
+
+      let(:insert) do
+        Mongo::Protocol::Insert.new(TEST_DB, TEST_COLL, documents)
+      end
+
+      let(:query_bob) do
+        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { 'name' => 'bob' })
+      end
+
+      let(:query_alice) do
+        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { 'name' => 'alice' })
+      end
+
+      after do
+        authorized_collection.delete_many
+      end
+
+      before do
+        # Fake a query for which we did not read the response. See RUBY-1117
+        allow(query_bob).to receive(:replyable?) { false }
+        connection.dispatch([ insert, query_bob ])
+      end
+
+      it 'raises an UnexpectedResponse' do
+        expect {
+          connection.dispatch([ query_alice ])
+        }.to raise_error(Mongo::Error::UnexpectedResponse,
+          /Got response for request ID \d+ but expected response for request ID \d+/)
+      end
+
+      it "doesn't break subsequent requests" do
+        expect {
+          connection.dispatch([ query_alice ])
+        }.to raise_error(Mongo::Error::UnexpectedResponse)
+
+        expect(connection.dispatch([ query_alice ]).documents.first['name']).to eq('alice')
+      end
+    end
+
+    context 'when a request is brutaly interrupted (Thread.kill)' do
+
+      let(:documents) do
+        [{ 'name' => 'bob' }, { 'name' => 'alice' }]
+      end
+
+      let(:insert) do
+        Mongo::Protocol::Insert.new(TEST_DB, TEST_COLL, documents)
+      end
+
+      let(:query_bob) do
+        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { 'name' => 'bob' })
+      end
+
+      let(:query_alice) do
+        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { 'name' => 'alice' })
+      end
+
+      before do
+        connection.dispatch([ insert ])
+      end
+
+      after do
+        authorized_collection.delete_many
+      end
+
+      it "closes the socket and does not use it for subsequent requests" do
+        t = Thread.new {
+          # Kill the thread just before the reply is read
+          allow(Mongo::Protocol::Reply).to receive(:deserialize_header) { t.kill }
+          connection.dispatch([ query_bob ])
+        }
+        t.join
+        allow(Mongo::Protocol::Reply).to receive(:deserialize_header).and_call_original
+        expect(connection.dispatch([ query_alice ]).documents.first['name']).to eq('alice')
+      end
+    end
+
 
     context 'when the message exceeds the max size' do
 
@@ -435,6 +529,76 @@ describe Mongo::Server::Connection do
 
       it 'sets the auth options' do
         expect(connection.options[:user]).to eq(user.name)
+      end
+    end
+  end
+
+  describe '#auth_mechanism' do
+
+    let(:connection) do
+      described_class.new(server)
+    end
+
+    let(:reply) do
+      double('reply').tap do |r|
+        allow(r).to receive(:documents).and_return([ ismaster ])
+      end
+    end
+
+    before do
+      connection.connect!
+      socket = connection.instance_variable_get(:@socket)
+      max_message_size = connection.send(:max_message_size)
+      allow(Mongo::Protocol::Reply).to receive(:deserialize).with(socket, max_message_size).and_return(reply)
+    end
+
+    context 'when the ismaster response indicates the auth mechanism is :scram' do
+
+      let(:ismaster) do
+        {
+            'maxWireVersion' => 3,
+            'minWireVersion' => 0,
+            'ok' => 1
+        }
+      end
+
+      context 'when the server auth mechanism is scram', if: scram_sha_1_enabled? do
+
+        it 'uses scram' do
+          expect(connection.send(:default_mechanism)).to eq(:scram)
+        end
+      end
+
+      context 'when the server auth mechanism is the default (mongodb_cr)', unless: scram_sha_1_enabled?  do
+
+        it 'uses scram' do
+          expect(connection.send(:default_mechanism)).to eq(:scram)
+        end
+      end
+    end
+
+    context 'when the ismaster response indicates the auth mechanism is :mongodb_cr' do
+
+      let(:ismaster) do
+        {
+            'maxWireVersion' => 2,
+            'minWireVersion' => 0,
+            'ok' => 1
+        }
+      end
+
+      context 'when the server auth mechanism is scram', if: scram_sha_1_enabled? do
+
+        it 'uses scram' do
+          expect(connection.send(:default_mechanism)).to eq(:scram)
+        end
+      end
+
+      context 'when the server auth mechanism is the default (mongodb_cr)', unless: scram_sha_1_enabled?  do
+
+        it 'uses mongodb_cr' do
+          expect(connection.send(:default_mechanism)).to eq(:mongodb_cr)
+        end
       end
     end
   end
