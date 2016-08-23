@@ -207,6 +207,10 @@ module Mongo
       end
 
       def default_mechanism
+        if @server.options[:always_use_scram]
+          return :scram
+        end
+
         if socket && socket.connectable?
           socket.write(Monitor::Connection::ISMASTER_BYTES)
           ismaster = Protocol::Reply.deserialize(socket, max_message_size).documents[0]
