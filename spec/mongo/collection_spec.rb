@@ -135,12 +135,8 @@ describe Mongo::Collection do
           Mongo::Client.new(ADDRESSES, server_selection_timeout: 2)
         end
 
-        let(:server_selection_timeout) do
-          new_collection.read_preference.server_selection_timeout
-        end
-
-        it 'keeps the server_selection_timeout setting from client' do
-          expect(server_selection_timeout).to eq(client.options[:server_selection_timeout])
+        it 'passes the the server_selection_timeout to the cluster' do
+          expect(client.cluster.options[:server_selection_timeout]).to eq(client.options[:server_selection_timeout])
         end
       end
 
@@ -152,6 +148,7 @@ describe Mongo::Collection do
 
         it 'sets the new read options on the new collection' do
           expect(new_collection.read_preference).to eq(Mongo::ServerSelector.get(new_options[:read]))
+          expect(new_collection.read_preference).not_to eq(client.read_preference)
         end
       end
 
@@ -161,16 +158,12 @@ describe Mongo::Collection do
           Mongo::Client.new(ADDRESSES, read: { mode: :primary_preferred }, server_selection_timeout: 2)
         end
 
-        let(:server_selection_timeout) do
-          new_collection.read_preference.server_selection_timeout
-        end
-
         it 'sets the new read options on the new collection' do
           expect(new_collection.read_preference).to eq(Mongo::ServerSelector.get(new_options[:read]))
         end
 
-        it 'keeps the server_selection_timeout setting from client' do
-          expect(server_selection_timeout).to eq(client.options[:server_selection_timeout])
+        it 'passes the server_selection_timeout setting to the cluster' do
+          expect(client.cluster.options[:server_selection_timeout]).to eq(client.options[:server_selection_timeout])
         end
       end
     end
@@ -228,12 +221,8 @@ describe Mongo::Collection do
           Mongo::Client.new(ADDRESSES, server_selection_timeout: 2)
         end
 
-        let(:server_selection_timeout) do
-          new_collection.read_preference.server_selection_timeout
-        end
-
-        it 'keeps the server_selection_timeout setting from client' do
-          expect(server_selection_timeout).to eq(client.options[:server_selection_timeout])
+        it 'passes the server_selection_timeout setting to the cluster' do
+          expect(client.cluster.options[:server_selection_timeout]).to eq(client.options[:server_selection_timeout])
         end
       end
 
@@ -245,6 +234,7 @@ describe Mongo::Collection do
 
         it 'sets the new read options on the new collection' do
           expect(new_collection.read_preference).to eq(Mongo::ServerSelector.get(new_options[:read]))
+          expect(new_collection.read_preference).not_to be(client.read_preference)
         end
       end
     end
@@ -719,6 +709,19 @@ describe Mongo::Collection do
       expect(result.inserted_ids.size).to eq(2)
     end
 
+    context 'when a document contains invalid keys' do
+
+      let(:docs) do
+        [ { 'first.name' => 'test1' }, { name: 'test2' } ]
+      end
+
+      it 'raises a BSON::String::IllegalKey exception' do
+        expect {
+          authorized_collection.insert_many(docs)
+        }.to raise_exception(BSON::String::IllegalKey)
+      end
+    end
+
     context 'when the client has a custom id generator' do
 
       let(:generator) do
@@ -840,6 +843,19 @@ describe Mongo::Collection do
 
     it 'contains the id in the result' do
       expect(result.inserted_id).to_not be_nil
+    end
+
+    context 'when the document contains invalid keys' do
+
+      let(:doc) do
+        { 'testing.test' => 'value' }
+      end
+
+      it 'raises a BSON::String::IllegalKey exception' do
+        expect {
+          authorized_collection.insert_one(doc)
+        }.to raise_exception(BSON::String::IllegalKey)
+      end
     end
 
     context 'when the insert fails' do
@@ -1207,6 +1223,67 @@ describe Mongo::Collection do
 
         let(:options) do
           { read_concern: { level: 'idontknow' }}
+        end
+
+        it 'raises an exception' do
+          expect {
+            result
+          }.to raise_error(Mongo::Error::OperationFailure)
+        end
+      end
+    end
+
+    context 'when the collection has a read preference', unless: sharded? do
+
+      before do
+        allow(collection.client.cluster).to receive(:single?).and_return(false)
+      end
+
+      after do
+        client.close
+      end
+
+      let(:client) do
+        authorized_client.with(server_selection_timeout: 0.2)
+      end
+
+      let(:collection) do
+        client[authorized_collection.name,
+               read: { :mode => :secondary, :tag_sets => [{ 'non' => 'existent' }] }]
+      end
+
+      let(:result) do
+        collection.parallel_scan(2)
+      end
+
+      it 'uses that read preference' do
+        expect {
+          result
+        }.to raise_exception(Mongo::Error::NoServerAvailable)
+      end
+    end
+
+    context 'when a max time ms value is provided', if: (!sharded? && write_command_enabled?) do
+
+      let(:result) do
+        authorized_collection.parallel_scan(2, options)
+      end
+
+      context 'when the read concern is valid' do
+
+        let(:options) do
+          { max_time_ms: 2 }
+        end
+
+        it 'sends the max time ms value' do
+          expect { result }.to_not raise_error
+        end
+      end
+
+      context 'when the max time ms is not valid' do
+
+        let(:options) do
+          { max_time_ms: 0.1 }
         end
 
         it 'raises an exception' do

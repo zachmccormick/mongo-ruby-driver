@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -130,12 +130,13 @@ module Mongo
         # @example Convert the chunk to BSON.
         #   chunk.to_bson
         #
-        # @param [ String ] buffer The encoded data buffer to append to.
+        # @param [ BSON::ByteBuffer ] buffer The encoded BSON buffer to append to.
+        # @param [ true, false ] validating_keys Whether keys should be validated when serializing.
         #
         # @return [ String ] The raw BSON data.
         #
         # @since 2.0.0
-        def to_bson(buffer = BSON::ByteBuffer.new, validating_keys = nil)
+        def to_bson(buffer = BSON::ByteBuffer.new, validating_keys = BSON::Config.validating_keys?)
           document.to_bson(buffer)
         end
 
@@ -161,8 +162,9 @@ module Mongo
           # @example Split the data into chunks.
           #   Chunks.split(data)
           #
-          # @param [ String, IO ] data The raw bytes.
+          # @param [ String, IO ] io The raw bytes.
           # @param [ File::Info ] file_info The files collection file doc.
+          # @param [ Integer ] offset The offset.
           #
           # @return [ Array<Chunk> ] The chunks of the data.
           #

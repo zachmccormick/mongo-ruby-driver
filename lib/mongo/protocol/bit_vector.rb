@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ module Mongo
         # @param value [ Array<Symbol> ] Array of flags to encode
         #
         # @return [ String ] Buffer that received the serialized vector
-        def serialize(buffer, value)
+        def serialize(buffer, value, validating_keys = BSON::Config.validating_keys?)
           bits = 0
           value.each { |flag| bits |= @masks[flag] }
           buffer.put_int32(bits)

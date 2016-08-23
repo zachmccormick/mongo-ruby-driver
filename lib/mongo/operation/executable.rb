@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,18 +22,19 @@ module Mongo
     module Executable
 
       # Execute the operation.
-      # The context gets a connection on which the operation
-      # is sent in the block.
       #
-      # @param [ Mongo::Server::Context ] context The context for this operation.
+      # @example Execute the operation.
+      #   operation.execute(server)
+      #
+      # @param [ Mongo::Server ] server The server to send this operation to.
       #
       # @return [ Result ] The operation response, if there is one.
       #
       # @since 2.0.0
-      def execute(context)
-        context.with_connection do |connection|
+      def execute(server)
+        server.with_connection do |connection|
           result_class = self.class.const_defined?(:Result, false) ? self.class::Result : Result
-          result_class.new(connection.dispatch([ message(context) ], operation_id)).validate!
+          result_class.new(connection.dispatch([ message(server) ], operation_id)).validate!
         end
       end
     end

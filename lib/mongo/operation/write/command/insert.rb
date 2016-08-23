@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,6 +47,16 @@ module Mongo
               cmd.merge!(writeConcern: write_concern.options) if write_concern
               cmd.merge!(:bypassDocumentValidation => true) if bypass_document_validation
             end
+          end
+
+          # The wire protocol message for this write operation.
+          #
+          # @return [ Mongo::Protocol::Query ] Wire protocol message.
+          #
+          # @since 2.2.5
+          def message
+            opts = options.merge(validating_keys: true)
+            Protocol::Query.new(db_name, Database::COMMAND, selector, opts)
           end
         end
       end

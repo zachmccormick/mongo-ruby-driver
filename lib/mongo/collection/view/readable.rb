@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -120,6 +120,7 @@ module Mongo
         # @option options :limit [ Integer ] Max number of docs to return.
         # @option options :max_time_ms [ Integer ] The maximum amount of time to allow the
         #   command to run.
+        # @option options [ Hash ] :read The read preference options.
         #
         # @return [ Integer ] The document count.
         #
@@ -132,6 +133,7 @@ module Mongo
           cmd[:maxTimeMS] = options[:max_time_ms] if options[:max_time_ms]
           cmd[:readConcern] = collection.read_concern if collection.read_concern
           read_with_retry do
+            options = options.merge(read: read) unless options[:read]
             database.command(cmd, options).n.to_i
           end
         end
@@ -146,7 +148,7 @@ module Mongo
         #
         # @option options :max_time_ms [ Integer ] The maximum amount of time to allow the
         #   command to run.
-        # @option options :read [ Hash ] The read preference for this command.
+        # @option options [ Hash ] :read The read preference options.
         #
         # @return [ Array<Object> ] The list of distinct values.
         #
@@ -158,6 +160,7 @@ module Mongo
           cmd[:maxTimeMS] = options[:max_time_ms] if options[:max_time_ms]
           cmd[:readConcern] = collection.read_concern if collection.read_concern
           read_with_retry do
+            options = options.merge(read: read) unless options[:read]
             database.command(cmd, options).first['values']
           end
         end
@@ -293,7 +296,7 @@ module Mongo
         # @since 2.0.0
         def read(value = nil)
           return default_read if value.nil?
-          selector = value.is_a?(Hash) ? ServerSelector.get(client.options.merge(value)) : value
+          selector = ServerSelector.get(value)
           configure(:read, selector)
         end
 
@@ -416,32 +419,47 @@ module Mongo
           configure(:max_time_ms, max)
         end
 
+        # The type of cursor to use. Can be :tailable or :tailable_await.
+        #
+        # @example Set the cursor type.
+        #   view.cursor_type(:tailable)
+        #
+        # @param [ :tailable, :tailable_await ] type The cursor type.
+        #
+        # @return [ :tailable, :tailable_await, View ] Either the cursor type setting or a new +View+.
+        #
+        # @since 2.3.0
+        def cursor_type(type = nil)
+          configure(:cursor_type, type)
+        end
+
         private
 
         def default_read
           options[:read] || read_preference
         end
 
-        def parallel_scan(cursor_count)
+        def parallel_scan(cursor_count, options = {})
           server = read.select_server(cluster, false)
-          Operation::Commands::ParallelScan.new(
-            :coll_name => collection.name,
-            :db_name => database.name,
-            :cursor_count => cursor_count,
-            :read_concern => collection.read_concern
-          ).execute(server.context).cursor_ids.map do |cursor_id|
+          cmd = Operation::Commands::ParallelScan.new({
+                  :coll_name => collection.name,
+                  :db_name => database.name,
+                  :cursor_count => cursor_count,
+                  :read_concern => collection.read_concern
+                }.merge!(options))
+          cmd.execute(server).cursor_ids.map do |cursor_id|
             result = if server.features.find_command_enabled?
-              Operation::Commands::GetMore.new({
+                Operation::Commands::GetMore.new({
                   :selector => { :getMore => cursor_id, :collection => collection.name },
                   :db_name  => database.name
-                }).execute(server.context)
-            else
-              Operation::Read::GetMore.new({
+                }).execute(server)
+              else
+                Operation::Read::GetMore.new({
                   :to_return => 0,
                   :cursor_id => cursor_id,
                   :db_name   => database.name,
                   :coll_name => collection.name
-                }).execute(server.context)
+                }).execute(server)
             end
             Cursor.new(self, result, server)
           end

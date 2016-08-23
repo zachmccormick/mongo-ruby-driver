@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -66,9 +66,6 @@ module Mongo
           authenticate!
         end
         true
-      rescue Mongo::Auth::Unauthorized => e
-        disconnect!
-        raise e
       end
 
       # Disconnect the connection.
@@ -91,32 +88,6 @@ module Mongo
           @in_auth_process = {}
         end
         true
-      end
-
-      # If there is an authentication mechanism in place, attempt to log in
-      #
-      # @example Authenticate or reauthenticate the connection
-      #   connection.authenticate!
-      #
-      # @since 2.2.0
-      def authenticate!(opts = nil)
-        # The only place where authenticate! is called with nil options is in the connect! phase, but we don't want
-        # to authenticate if we have previously authenticated from a Context#with_connection
-        if opts.nil? && @in_auth_process.values.any? {|v| v}
-          return
-        end
-
-        needs_auth, authenticator = setup_authentication!(opts)
-        if needs_auth && authenticator && !@in_auth_process[authenticator.user.database]
-          # Keep track of whether or not we are authenticating against a specific database, as the
-          # monitoring lass will get called by @authenticator.login(self) and we don't want to auth more than once
-          # on this connection, as Context.with_connection is now tightly coupled to auth
-          @in_auth_process[authenticator.user.database] = true
-          authenticator.login(self)
-          @authenticated = true
-          @authentication_by_db[authenticator.user.database] = true
-          @in_auth_process[authenticator.user.database] = false
-        end
       end
 
       # Dispatch the provided messages to the connection. If the last message
@@ -166,6 +137,7 @@ module Mongo
         @ssl_options = options.reject { |k, v| !k.to_s.start_with?(SSL) }
         @socket = nil
         @pid = Process.pid
+        @authenticated = false
         @authentication_by_db = {}
         @in_auth_process = {}
         setup_authentication!
@@ -190,6 +162,34 @@ module Mongo
         end
       end
 
+      # If there is an authentication mechanism in place, attempt to log in
+      #
+      # @example Authenticate or reauthenticate the connection
+      #   connection.authenticate!
+      #
+      # @since 2.2.0
+      def authenticate!(opts = nil)
+        # The only place where authenticate! is called with nil options is in the connect! phase, but we don't want
+        # to authenticate if we have previously authenticated from a Context#with_connection
+        if opts.nil? && @in_auth_process.values.any? {|v| v}
+          return
+        end
+
+        needs_auth, authenticator = setup_authentication!(opts)
+        if needs_auth && authenticator && !@in_auth_process[authenticator.user.database]
+          # Keep track of whether or not we are authenticating against a specific database, as the
+          # monitoring lass will get called by @authenticator.login(self) and we don't want to auth more than once
+          # on this connection, as Context.with_connection is now tightly coupled to auth
+          @in_auth_process[authenticator.user.database] = true
+          @server.handle_auth_failure! do
+            authenticator.login(self)
+          end
+          @authenticated = true
+          @authentication_by_db[authenticator.user.database] = true
+          @in_auth_process[authenticator.user.database] = false
+        end
+      end
+
       private
 
       def deliver(messages)
@@ -200,12 +200,9 @@ module Mongo
       def setup_authentication!(opts = nil)
         opts ||= options
         if opts[:user]
-          default_mechanism = (@server.features.scram_sha_1_enabled? || @server.options[:always_use_scram]) ? :scram : :mongodb_cr
           user = Auth::User.new(Options::Redacted.new(:auth_mech => default_mechanism).merge(opts))
-          authenticator = Auth.get(user)
-          return true, authenticator
+          return true, Auth.get(user)
         end
-
         return false, nil
       end
 

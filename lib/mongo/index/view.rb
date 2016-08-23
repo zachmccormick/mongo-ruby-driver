@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@ module Mongo
         :bucket_size => :bucketSize,
         :default_language => :default_language,
         :expire_after => :expireAfterSeconds,
+        :expire_after_seconds => :expireAfterSeconds,
         :key => :key,
         :language_override => :language_override,
         :max => :max,
@@ -150,7 +151,7 @@ module Mongo
           indexes: normalize_models(models.flatten),
           db_name: database.name,
           coll_name: collection.name,
-        ).execute(next_primary.context)
+        ).execute(next_primary)
       end
 
       # Convenience method for getting index information by a specific name or
@@ -216,7 +217,7 @@ module Mongo
           db_name: database.name,
           coll_name: collection.name,
           index_name: name
-        ).execute(next_primary.context)
+        ).execute(next_primary)
       end
 
       def index_name(spec)
@@ -249,7 +250,7 @@ module Mongo
       end
 
       def send_initial_query(server)
-        initial_query_op.execute(server.context)
+        initial_query_op.execute(server)
       end
 
       def with_generated_names(models)

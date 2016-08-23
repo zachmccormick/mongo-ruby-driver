@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ module Mongo
             log_warn(REROUTE)
             server = cluster.next_primary(false)
           end
-          initial_query_op.execute(server.context)
+          initial_query_op.execute(server)
         end
       end
     end

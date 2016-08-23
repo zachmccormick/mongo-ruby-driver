@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -41,15 +41,15 @@ module Mongo
         # Execute the drop index operation.
         #
         # @example Execute the operation.
-        #   operation.execute(context)
+        #   operation.execute(server)
         #
-        # @param [ Mongo::Server::Context ] context The context for this operation.
+        # @param [ Mongo::Server ] server The server to send this operation to.
         #
         # @return [ Result ] The result of the operation.
         #
         # @since 2.0.0
-        def execute(context)
-          execute_write_command(context)
+        def execute(server)
+          execute_write_command(server)
         end
 
         private

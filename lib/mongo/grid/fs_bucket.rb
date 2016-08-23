@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -100,11 +100,14 @@ module Mongo
       # @return [ Grid::File ] The file.
       #
       # @since 2.0.0
+      #
+      # @deprecated Please use #find instead with a limit of -1.
+      #   Will be removed in version 3.0.
       def find_one(selector = nil)
         file_info = files_collection.find(selector).first
         return nil unless file_info
         chunks = chunks_collection.find(:files_id => file_info[:_id]).sort(:n => 1)
-        Grid::File.new(chunks.to_a, file_info)
+        Grid::File.new(chunks.to_a, Options::Mapper.transform(file_info, Grid::File::Info::MAPPINGS.invert))
       end
 
       # Insert a single file into the GridFS.
@@ -117,6 +120,9 @@ module Mongo
       # @return [ BSON::ObjectId ] The file id.
       #
       # @since 2.0.0
+      #
+      # @deprecated Please use #upload_from_stream or #open_upload_stream instead.
+      #   Will be removed in version 3.0.
       def insert_one(file)
         @indexes ||= ensure_indexes!
         chunks_collection.insert_many(file.chunks)
@@ -331,6 +337,7 @@ module Mongo
       # @param [ String ] filename The filename of the file to upload.
       # @param [ Hash ] opts The options for the write stream.
       #
+      # @option opts [ Object ] :file_id An optional unique file id. An ObjectId is generated otherwise.
       # @option opts [ Integer ] :chunk_size Override the default chunk size.
       # @option opts [ Hash ] :write The write concern.
       # @option opts [ Hash ] :metadata User data for the 'metadata' field of the files
@@ -360,12 +367,13 @@ module Mongo
       # document for the filename in the files collection.
       #
       # @example Upload a file to the GridFS bucket.
-      #   fs.upload_from_stream('a-file.txt')
+      #   fs.upload_from_stream('a-file.txt', file)
       #
       # @param [ String ] filename The filename of the file to upload.
       # @param [ IO ] io The source io stream to upload from.
       # @param [ Hash ] opts The options for the write stream.
       #
+      # @option opts [ Object ] :file_id An optional unique file id. An ObjectId is generated otherwise.
       # @option opts [ Integer ] :chunk_size Override the default chunk size.
       # @option opts [ Hash ] :write The write concern.
       # @option opts [ Hash ] :metadata User data for the 'metadata' field of the files
@@ -401,9 +409,7 @@ module Mongo
       #
       # @since 2.1.0
       def read_preference
-        @read_preference ||= @options[:read] ?
-            ServerSelector.get(Options::Redacted.new((@options[:read] || {}).merge(client.options))) :
-            database.read_preference
+        @read_preference ||= ServerSelector.get(@options[:read] || database.read_preference)
       end
 
       # Get the write concern.

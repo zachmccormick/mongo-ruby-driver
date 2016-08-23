@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -169,7 +169,7 @@ module Mongo
     def delete(documents, server, operation_id)
       Operation::Write::Bulk::Delete.new(
         base_spec(operation_id).merge(:deletes => documents)
-      ).execute(server.context)
+      ).execute(server)
     end
 
     alias :delete_one :delete
@@ -178,13 +178,13 @@ module Mongo
     def insert_one(documents, server, operation_id)
       Operation::Write::Bulk::Insert.new(
         base_spec(operation_id).merge(:documents => documents)
-      ).execute(server.context)
+      ).execute(server)
     end
 
     def update(documents, server, operation_id)
       Operation::Write::Bulk::Update.new(
         base_spec(operation_id).merge(:updates => documents)
-      ).execute(server.context)
+      ).execute(server)
     end
 
     alias :replace_one :update

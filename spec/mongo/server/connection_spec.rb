@@ -113,7 +113,8 @@ describe Mongo::Server::Connection do
             TEST_OPTIONS.merge(
               :user => 'notauser',
               :password => 'password',
-              :database => TEST_DB )
+              :database => TEST_DB,
+              :heartbeat_frequency => 30)
           )
         end
 
@@ -130,7 +131,6 @@ describe Mongo::Server::Connection do
         end
 
         it 'marks the server as unknown' do
-          pending 'Server must be set as unknown'
           expect(server).to be_unknown
         end
       end
@@ -261,11 +261,11 @@ describe Mongo::Server::Connection do
       end
 
       let(:query_bob) do
-        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { 'name' => 'bob' })
+        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { name: 'bob' })
       end
 
       let(:query_alice) do
-        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { 'name' => 'alice' })
+        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { name: 'alice' })
       end
 
       after do
@@ -278,14 +278,14 @@ describe Mongo::Server::Connection do
         connection.dispatch([ insert, query_bob ])
       end
 
-      it 'raises an UnexpectedResponse' do
+      it 'raises an UnexpectedResponse error' do
         expect {
           connection.dispatch([ query_alice ])
         }.to raise_error(Mongo::Error::UnexpectedResponse,
           /Got response for request ID \d+ but expected response for request ID \d+/)
       end
 
-      it "doesn't break subsequent requests" do
+      it 'does not affect subsequent requests' do
         expect {
           connection.dispatch([ query_alice ])
         }.to raise_error(Mongo::Error::UnexpectedResponse)
@@ -294,7 +294,7 @@ describe Mongo::Server::Connection do
       end
     end
 
-    context 'when a request is brutaly interrupted (Thread.kill)' do
+    context 'when a request is interrupted (Thread.kill)' do
 
       let(:documents) do
         [{ 'name' => 'bob' }, { 'name' => 'alice' }]
@@ -305,11 +305,11 @@ describe Mongo::Server::Connection do
       end
 
       let(:query_bob) do
-        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { 'name' => 'bob' })
+        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { name: 'bob' })
       end
 
       let(:query_alice) do
-        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { 'name' => 'alice' })
+        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { name: 'alice' })
       end
 
       before do
@@ -320,7 +320,7 @@ describe Mongo::Server::Connection do
         authorized_collection.delete_many
       end
 
-      it "closes the socket and does not use it for subsequent requests" do
+      it 'closes the socket and does not use it for subsequent requests' do
         t = Thread.new {
           # Kill the thread just before the reply is read
           allow(Mongo::Protocol::Reply).to receive(:deserialize_header) { t.kill }
@@ -331,7 +331,6 @@ describe Mongo::Server::Connection do
         expect(connection.dispatch([ query_alice ]).documents.first['name']).to eq('alice')
       end
     end
-
 
     context 'when the message exceeds the max size' do
 
@@ -547,9 +546,6 @@ describe Mongo::Server::Connection do
 
     before do
       connection.connect!
-      socket = connection.instance_variable_get(:@socket)
-      max_message_size = connection.send(:max_message_size)
-      allow(Mongo::Protocol::Reply).to receive(:deserialize).with(socket, max_message_size).and_return(reply)
     end
 
     context 'when the ismaster response indicates the auth mechanism is :scram' do
@@ -565,6 +561,9 @@ describe Mongo::Server::Connection do
       context 'when the server auth mechanism is scram', if: scram_sha_1_enabled? do
 
         it 'uses scram' do
+          socket = connection.instance_variable_get(:@socket)
+          max_message_size = connection.send(:max_message_size)
+          allow(Mongo::Protocol::Reply).to receive(:deserialize).with(socket, max_message_size).and_return(reply)
           expect(connection.send(:default_mechanism)).to eq(:scram)
         end
       end
@@ -572,6 +571,9 @@ describe Mongo::Server::Connection do
       context 'when the server auth mechanism is the default (mongodb_cr)', unless: scram_sha_1_enabled?  do
 
         it 'uses scram' do
+          socket = connection.instance_variable_get(:@socket)
+          max_message_size = connection.send(:max_message_size)
+          allow(Mongo::Protocol::Reply).to receive(:deserialize).with(socket, max_message_size).and_return(reply)
           expect(connection.send(:default_mechanism)).to eq(:scram)
         end
       end
@@ -590,6 +592,9 @@ describe Mongo::Server::Connection do
       context 'when the server auth mechanism is scram', if: scram_sha_1_enabled? do
 
         it 'uses scram' do
+          socket = connection.instance_variable_get(:@socket)
+          max_message_size = connection.send(:max_message_size)
+          allow(Mongo::Protocol::Reply).to receive(:deserialize).with(socket, max_message_size).and_return(reply)
           expect(connection.send(:default_mechanism)).to eq(:scram)
         end
       end
@@ -597,6 +602,9 @@ describe Mongo::Server::Connection do
       context 'when the server auth mechanism is the default (mongodb_cr)', unless: scram_sha_1_enabled?  do
 
         it 'uses mongodb_cr' do
+          socket = connection.instance_variable_get(:@socket)
+          max_message_size = connection.send(:max_message_size)
+          allow(Mongo::Protocol::Reply).to receive(:deserialize).with(socket, max_message_size).and_return(reply)
           expect(connection.send(:default_mechanism)).to eq(:mongodb_cr)
         end
       end

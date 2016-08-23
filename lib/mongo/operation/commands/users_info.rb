@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ module Mongo
           { :usersInfo => user_name }
         end
 
-        def message(context)
+        def message(server)
           Protocol::Query.new(db_name, query_coll, selector, options)
         end
       end

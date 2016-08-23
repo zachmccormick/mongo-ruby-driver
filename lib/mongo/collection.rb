@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -112,8 +112,7 @@ module Mongo
     #
     # @since 2.0.0
     def read_preference
-      @read_preference ||= options[:read] ? ServerSelector.get(client.options.merge(options[:read])) :
-        database.read_preference
+      @read_preference ||= ServerSelector.get(options[:read] || database.read_preference)
     end
 
     # Get the write concern on this collection.
@@ -269,6 +268,7 @@ module Mongo
     # @option options [ Integer ] :limit The maximum number of documents to count.
     # @option options [ Integer ] :max_time_ms The maximum amount of time to allow the command to run.
     # @option options [ Integer ] :skip The number of documents to skip before counting.
+    # @option options [ Hash ] :read The read preference options.
     #
     # @return [ Integer ] The document count.
     #
@@ -287,6 +287,7 @@ module Mongo
     # @param [ Hash ] options The distinct command options.
     #
     # @option options [ Integer ] :max_time_ms The maximum amount of time to allow the command to run.
+    # @option options [ Hash ] :read The read preference options.
     #
     # @return [ Array<Object> ] The list of distinct values.
     #
@@ -343,7 +344,7 @@ module Mongo
           :bypass_document_validation => !!options[:bypass_document_validation],
           :options => options,
           :id_generator => client.options[:id_generator]
-        ).execute(next_primary.context)
+        ).execute(next_primary)
       end
     end
 
@@ -423,12 +424,16 @@ module Mongo
     #   collection.parallel_scan(2)
     #
     # @param [ Integer ] cursor_count The max number of cursors to return.
+    # @param [ Hash ] options The parallel scan command options.
+    #
+    # @option options [ Integer ] :max_time_ms The maximum amount of time to allow the command
+    #   to run in milliseconds.
     #
     # @return [ Array<Cursor> ] An array of cursors.
     #
     # @since 2.1
-    def parallel_scan(cursor_count)
-      find.send(:parallel_scan, cursor_count)
+    def parallel_scan(cursor_count, options = {})
+      find.send(:parallel_scan, cursor_count, options)
     end
 
     # Replaces a single document in the collection with the new document.

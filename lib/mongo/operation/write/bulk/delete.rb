@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -54,8 +54,8 @@ module Mongo
 
           private
 
-          def execute_write_command(context)
-            Result.new(Command::Delete.new(spec).execute(context))
+          def execute_write_command(server)
+            Result.new(Command::Delete.new(spec).execute(server))
           end
 
           def messages

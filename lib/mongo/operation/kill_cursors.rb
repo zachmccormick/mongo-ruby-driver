@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ module Mongo
 
       private
 
-      def message(context)
+      def message(server)
         Protocol::KillCursors.new(coll_name, db_name, cursor_ids)
       end
     end

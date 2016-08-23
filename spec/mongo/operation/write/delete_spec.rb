@@ -1,22 +1,21 @@
 require 'spec_helper'
 
 describe Mongo::Operation::Write::Delete do
-  include_context 'operation'
 
-  let(:document) { { :q => { :foo => 1 }, :limit => 1 } }
-  let(:spec) do
-    { :delete        => document,
-      :db_name       => db_name,
-      :coll_name     => coll_name,
-      :write_concern => write_concern,
-      :ordered       => true
+  let(:document) do
+    {
+      :q => { :foo => 1 },
+      :limit => 1
     }
   end
 
-  let(:delete_write_cmd) do
-    double('delete_write_cmd').tap do |d|
-      allow(d).to receive(:execute) { [] }
-    end
+  let(:spec) do
+    { :delete        => document,
+      :db_name       => TEST_DB,
+      :coll_name     => TEST_COLL,
+      :write_concern => Mongo::WriteConcern.get(WRITE_CONCERN),
+      :ordered       => true
+    }
   end
 
   let(:op) { described_class.new(spec) }
@@ -45,11 +44,12 @@ describe Mongo::Operation::Write::Delete do
 
       context 'when two ops have different specs' do
         let(:other_doc) { { :q => { :bar => 1 }, :limit => 1 } }
+
         let(:other_spec) do
           { :delete        => other_doc,
-            :db_name       => db_name,
-            :coll_name     => coll_name,
-            :write_concern => write_concern,
+            :db_name       => TEST_DB,
+            :coll_name     => TEST_COLL,
+            :write_concern => Mongo::WriteConcern.get(WRITE_CONCERN),
             :ordered       => true
           }
         end
@@ -82,7 +82,7 @@ describe Mongo::Operation::Write::Delete do
           delete: document,
           db_name: TEST_DB,
           coll_name: TEST_COLL,
-          write_concern: Mongo::WriteConcern.get(:w => 1)
+          write_concern: Mongo::WriteConcern.get(WRITE_CONCERN)
         })
       end
 
@@ -93,7 +93,7 @@ describe Mongo::Operation::Write::Delete do
         end
 
         let(:result) do
-          delete.execute(authorized_primary.context)
+          delete.execute(authorized_primary)
         end
 
         it 'deletes the documents from the database' do
@@ -113,7 +113,7 @@ describe Mongo::Operation::Write::Delete do
 
         it 'raises an exception' do
           expect {
-            delete.execute(authorized_primary.context)
+            delete.execute(authorized_primary)
           }.to raise_error(Mongo::Error::OperationFailure)
         end
       end
@@ -126,7 +126,7 @@ describe Mongo::Operation::Write::Delete do
           delete: document,
           db_name: TEST_DB,
           coll_name: TEST_COLL,
-          write_concern: Mongo::WriteConcern.get(:w => 1)
+          write_concern: Mongo::WriteConcern.get(WRITE_CONCERN)
         })
       end
 
@@ -137,7 +137,7 @@ describe Mongo::Operation::Write::Delete do
         end
 
         let(:result) do
-          delete.execute(authorized_primary.context)
+          delete.execute(authorized_primary)
         end
 
         it 'deletes the documents from the database' do
@@ -156,13 +156,13 @@ describe Mongo::Operation::Write::Delete do
         end
 
         let(:result) do
-          delete.execute(authorized_primary.context)
+          delete.execute(authorized_primary)
         end
 
         it 'does not delete any documents' do
 
           expect {
-            op.execute(authorized_primary.context)
+            op.execute(authorized_primary)
           }.to raise_error(Mongo::Error::OperationFailure)
 
           expect(authorized_collection.find.count).to eq(2)
@@ -177,9 +177,38 @@ describe Mongo::Operation::Write::Delete do
 
         it 'raises an error' do
           expect {
-            op.execute(authorized_primary.context)
+            op.execute(authorized_primary)
           }.to raise_error(Mongo::Error::MaxBSONSize)
         end
+      end
+    end
+
+    context 'when write concern { w: 0 } is used' do
+
+      let(:delete) do
+        described_class.new({
+                              delete: document,
+                              db_name: TEST_DB,
+                              coll_name: TEST_COLL,
+                              write_concern: Mongo::WriteConcern.get(:w => 0)
+                            })
+      end
+
+
+      let(:document) do
+        { 'q' => { field: 'test' }, 'limit' => 1 }
+      end
+
+      let(:result) do
+        delete.execute(authorized_primary)
+      end
+
+      before do
+        expect(delete).to receive(:execute_message).and_call_original
+      end
+
+      it 'uses op codes instead of write commands' do
+        expect(result.written_count).to eq(0)
       end
     end
   end

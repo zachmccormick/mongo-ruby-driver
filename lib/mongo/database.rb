@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -148,14 +148,14 @@ module Mongo
     #
     # @return [ Hash ] The result of the command execution.
     def command(operation, opts = {})
-      preference = ServerSelector.get(client.options.merge(opts[:read])) if opts[:read]
-      server = preference ? preference.select_server(cluster, false) : cluster.next_primary(false)
+      preference = ServerSelector.get(opts[:read] || ServerSelector::PRIMARY)
+      server = preference.select_server(cluster)
       Operation::Commands::Command.new({
         :selector => operation,
         :db_name => name,
         :options => { :limit => -1 },
         :read => preference
-      }).execute(server.context)
+      }).execute(server)
     end
 
     # Drop the database and all its associated information.

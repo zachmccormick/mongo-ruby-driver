@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -191,7 +191,7 @@ module Mongo
               :db_name => collection.database.name,
               :coll_name => collection.name,
               :write_concern => collection.write_concern
-            ).execute(next_primary.context)
+            ).execute(next_primary)
           end
         end
 
@@ -206,7 +206,7 @@ module Mongo
               :coll_name => collection.name,
               :write_concern => collection.write_concern,
               :bypass_document_validation => !!opts[:bypass_document_validation]
-            ).execute(next_primary.context)
+            ).execute(next_primary)
           end
         end
       end

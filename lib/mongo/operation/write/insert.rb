@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -50,13 +50,13 @@ module Mongo
 
         private
 
-        def execute_write_command(context)
+        def execute_write_command(server)
           command_spec = spec.merge(:documents => ensure_ids(documents))
-          Result.new(Command::Insert.new(command_spec).execute(context), @ids).validate!
+          Result.new(Command::Insert.new(command_spec).execute(server), @ids).validate!
         end
 
-        def execute_message(context)
-          context.with_connection do |connection|
+        def execute_message(server)
+          server.with_connection do |connection|
             Result.new(connection.dispatch([ message, gle ].compact), @ids).validate!
           end
         end

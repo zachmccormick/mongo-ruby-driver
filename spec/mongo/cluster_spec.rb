@@ -62,7 +62,7 @@ describe Mongo::Cluster do
   describe '#inspect' do
 
     let(:preference) do
-      Mongo::ServerSelector.get
+      Mongo::ServerSelector.get(ServerSelector::PRIMARY)
     end
 
     it 'displays the cluster seeds and topology' do
@@ -74,7 +74,7 @@ describe Mongo::Cluster do
   describe '#replica_set_name' do
 
     let(:preference) do
-      Mongo::ServerSelector.get
+      Mongo::ServerSelector.get(ServerSelector::PRIMARY)
     end
 
     context 'when the option is provided' do
@@ -107,7 +107,7 @@ describe Mongo::Cluster do
   describe '#scan!' do
 
     let(:preference) do
-      Mongo::ServerSelector.get
+      Mongo::ServerSelector.get(ServerSelector::PRIMARY)
     end
 
     let(:known_servers) do
@@ -223,26 +223,36 @@ describe Mongo::Cluster do
       cluster.instance_variable_get(:@servers)
     end
 
+    let(:cursor_reaper) do
+      cluster.instance_variable_get(:@cursor_reaper)
+    end
+
     before do
       known_servers.each do |server|
         expect(server).to receive(:disconnect!).and_call_original
       end
+      expect(cursor_reaper).to receive(:stop!).and_call_original
     end
 
-    it 'disconnects each server and returns true' do
+    it 'disconnects each server and the cursor reaper and returns true' do
       expect(cluster.disconnect!).to be(true)
     end
   end
 
   describe '#reconnect!' do
 
+    let(:cursor_reaper) do
+      cluster.instance_variable_get(:@cursor_reaper)
+    end
+
     before do
       cluster.servers.each do |server|
         expect(server).to receive(:reconnect!).and_call_original
       end
+      expect(cursor_reaper).to receive(:restart!).and_call_original
     end
 
-    it 'reconnects each server and returns true' do
+    it 'reconnects each server and the cursor reaper and returns true' do
       expect(cluster.reconnect!).to be(true)
     end
   end
@@ -430,6 +440,27 @@ describe Mongo::Cluster do
         expect(cluster).not_to receive(:remove)
         cluster.remove_hosts(description)
       end
+    end
+  end
+
+  describe '#next_primary' do
+
+    let(:cluster) do
+      authorized_client.cluster
+    end
+
+    let(:primary_candidates) do
+      if cluster.single?
+        cluster.servers
+      elsif cluster.sharded?
+        cluster.servers
+      else
+        cluster.servers.select { |s| s.primary? }
+      end
+    end
+
+    it 'always returns the primary, mongos, or standalone' do
+      expect(primary_candidates).to include(cluster.next_primary)
     end
   end
 end

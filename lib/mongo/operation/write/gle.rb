@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,8 +24,8 @@ module Mongo
 
         private
 
-        def execute_message(context)
-          context.with_connection do |connection|
+        def execute_message(server)
+          server.with_connection do |connection|
             result_class = self.class.const_defined?(:LegacyResult, false) ? self.class::LegacyResult :
                 self.class.const_defined?(:Result, false) ? self.class::Result : Result
             result_class.new(connection.dispatch([ message, gle ].compact)).validate!

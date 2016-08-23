@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,16 +25,17 @@ module Mongo
           include Limited
 
           # Execute the operation.
-          # The context gets a connection on which the operation
-          # is sent in the block.
           #
-          # @param [ Mongo::Server::Context ] context The context for this operation.
+          # @example Execute the operation.
+          #   operation.execute(server)
+          #
+          # @param [ Mongo::Server ] server The server to send this operation to.
           #
           # @return [ Result ] The operation response, if there is one.
           #
           # @since 2.0.0
-          def execute(context)
-            context.with_connection do |connection|
+          def execute(server)
+            server.with_connection do |connection|
               connection.dispatch([ message ], operation_id)
             end
           end

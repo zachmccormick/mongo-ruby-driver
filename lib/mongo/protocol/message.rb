@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -199,16 +199,16 @@ module Mongo
           if field[:multi]
             value.each do |item|
               if field[:type].respond_to?(:size_limited?)
-                field[:type].serialize(buffer, item, max_bson_size)
+                field[:type].serialize(buffer, item, max_bson_size, validating_keys?)
               else
-                field[:type].serialize(buffer, item)
+                field[:type].serialize(buffer, item, validating_keys?)
               end
             end
           else
             if field[:type].respond_to?(:size_limited?)
-              field[:type].serialize(buffer, value, max_bson_size)
+              field[:type].serialize(buffer, value, max_bson_size, validating_keys?)
             else
-              field[:type].serialize(buffer, value)
+              field[:type].serialize(buffer, value, validating_keys?)
             end
           end
         end
@@ -291,6 +291,10 @@ module Mongo
           field[:name],
           field[:type].deserialize(io)
         )
+      end
+
+      def validating_keys?
+        @options[:validating_keys] if @options
       end
     end
   end

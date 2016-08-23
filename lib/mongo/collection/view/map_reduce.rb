@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -211,7 +211,7 @@ module Mongo
             log_warn(REROUTE)
             server = cluster.next_primary(false)
           end
-          result = initial_query_op.execute(server.context)
+          result = initial_query_op.execute(server)
           inline? ? result : send_fetch_query(server)
         end
 
@@ -232,7 +232,7 @@ module Mongo
         end
 
         def send_fetch_query(server)
-          fetch_query_op(server).execute(server.context)
+          fetch_query_op(server).execute(server)
         end
       end
     end

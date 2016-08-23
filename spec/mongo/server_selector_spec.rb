@@ -10,6 +10,17 @@ describe Mongo::ServerSelector do
       described_class.get(:mode => name, :tag_sets => tag_sets)
     end
 
+    context 'when a server selector object is passed' do
+
+      let(:name) do
+        :primary
+      end
+
+      it 'returns the object' do
+        expect(described_class.get(selector)).to be(selector)
+      end
+    end
+
     context 'when the mode is primary' do
 
       let(:name) do
@@ -134,7 +145,7 @@ describe Mongo::ServerSelector do
     context 'when #select returns a list of nils' do
 
       let(:servers) do
-        [ server(:primary) ]
+        [ make_server(:primary) ]
       end
 
       let(:cluster) do
@@ -143,11 +154,12 @@ describe Mongo::ServerSelector do
           allow(c).to receive(:single?).and_return(false)
           allow(c).to receive(:sharded?).and_return(false)
           allow(c).to receive(:scan!).and_return(true)
+          allow(c).to receive(:options).and_return(server_selection_timeout: 0.1)
         end
       end
 
       let(:read_pref) do
-        described_class.get(mode: :primary, server_selection_timeout: 0.1).tap do |pref|
+        described_class.get(mode: :primary).tap do |pref|
           allow(pref).to receive(:select).and_return([ nil, nil ])
         end
       end
@@ -156,6 +168,72 @@ describe Mongo::ServerSelector do
         expect do
           read_pref.select_server(cluster)
         end.to raise_exception(Mongo::Error::NoServerAvailable)
+      end
+    end
+
+    context 'when the cluster has a server_selection_timeout set' do
+
+      let(:servers) do
+        [ make_server(:secondary), make_server(:primary) ]
+      end
+
+      let(:cluster) do
+        double('cluster').tap do |c|
+          allow(c).to receive(:servers).and_return(servers)
+          allow(c).to receive(:single?).and_return(false)
+          allow(c).to receive(:sharded?).and_return(false)
+          allow(c).to receive(:scan!).and_return(true)
+          allow(c).to receive(:options).and_return(server_selection_timeout: 0)
+        end
+      end
+
+      let(:read_pref) do
+        described_class.get(mode: :nearest)
+      end
+
+      it 'uses the server_selection_timeout of the cluster' do
+        expect{
+          read_pref.select_server(cluster)
+        }.to raise_exception(Mongo::Error::NoServerAvailable)
+      end
+    end
+
+    context 'when the cluster has a local_threshold set' do
+
+      let(:near_server) do
+        make_server(:secondary).tap do |s|
+          allow(s).to receive(:connectable?).and_return(true)
+          allow(s).to receive(:average_round_trip_time).and_return(100)
+        end
+      end
+
+      let(:far_server) do
+        make_server(:secondary).tap do |s|
+          allow(s).to receive(:connectable?).and_return(true)
+          allow(s).to receive(:average_round_trip_time).and_return(200)
+        end
+      end
+
+      let(:servers) do
+        [ near_server, far_server ]
+      end
+
+      let(:cluster) do
+        double('cluster').tap do |c|
+          allow(c).to receive(:servers).and_return(servers)
+          allow(c).to receive(:single?).and_return(false)
+          allow(c).to receive(:sharded?).and_return(false)
+          allow(c).to receive(:scan!).and_return(true)
+          allow(c).to receive(:options).and_return(local_threshold: 0.050)
+        end
+      end
+
+      let(:read_pref) do
+        described_class.get(mode: :nearest)
+      end
+
+      it 'uses the local_threshold of the cluster' do
+        expect(read_pref.select_server(cluster)).to eq(near_server)
       end
     end
   end
@@ -174,11 +252,12 @@ describe Mongo::ServerSelector do
           allow(c).to receive(:single?).and_return(single)
           allow(c).to receive(:sharded?).and_return(sharded)
           allow(c).to receive(:scan!).and_return(true)
+          allow(c).to receive(:options).and_return(server_selection_timeout: 0.1)
         end
       end
 
       let(:read_pref) do
-        described_class.get(mode: :primary, server_selection_timeout: 0.1)
+        described_class.get(mode: :primary)
       end
 
       it 'raises a NoServerAvailable error' do

@@ -1,4 +1,4 @@
-# Copyright (C) 2015 MongoDB, Inc.
+# Copyright (C) 2015-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the 'License');
 # you may not use this file except in compliance with the License.
@@ -79,12 +79,13 @@ module Mongo
     # @example Convert the DBRef to raw BSON.
     #   dbref.to_bson
     #
-    # @param [ String ] buffer The encoded BSON buffer to append to.
+    # @param [ BSON::ByteBuffer ] buffer The encoded BSON buffer to append to.
+    # @param [ true, false ] validating_keys Whether keys should be validated when serializing.
     #
     # @return [ String ] The raw BSON.
     #
     # @since 2.1.0
-    def to_bson(buffer = BSON::ByteBuffer.new, validating_keys = nil)
+    def to_bson(buffer = BSON::ByteBuffer.new, validating_keys = BSON::Config.validating_keys?)
       as_json.to_bson(buffer)
     end
 

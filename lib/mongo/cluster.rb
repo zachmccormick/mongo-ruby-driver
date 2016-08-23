@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 require 'mongo/cluster/topology'
 require 'mongo/shared_connection_pool'
+require 'mongo/cluster/cursor_reaper'
 
 module Mongo
 
@@ -43,6 +44,7 @@ module Mongo
     attr_reader :topology
 
     def_delegators :topology, :replica_set?, :replica_set_name, :sharded?, :single?, :unknown?
+    def_delegators :@cursor_reaper, :register_cursor, :schedule_kill_cursor, :unregister_cursor
 
     # Determine if this cluster of servers is equal to another object. Checks the
     # servers currently in the cluster, not what was configured.
@@ -114,6 +116,10 @@ module Mongo
       subscribe_to(Event::PRIMARY_ELECTED, Event::PrimaryElected.new(self))
 
       seeds.each{ |seed| add(seed) }
+
+      @cursor_reaper = CursorReaper.new
+      @cursor_reaper.run!
+
       ObjectSpace.define_finalizer(self, self.class.finalize(pools))
     end
 
@@ -131,6 +137,8 @@ module Mongo
     # @since 2.2.0
     def self.finalize(pools)
       proc do
+        begin; @cursor_reaper.kill_cursors; rescue; end
+        @cursor_reaper.stop!
         if !share_connection?
           pools.values.each do |pool|
             pool.disconnect!
@@ -162,7 +170,8 @@ module Mongo
     #
     # @since 2.0.0
     def next_primary(ping = true)
-      ServerSelector.get(ServerSelector::PRIMARY.merge(options)).select_server(self, ping)
+      @primary_selector ||= ServerSelector.get(ServerSelector::PRIMARY)
+      @primary_selector.select_server(self, ping)
     end
 
     # Elect a primary server from the description that has just changed to a
@@ -299,6 +308,8 @@ module Mongo
     #
     # @since 2.1.0
     def disconnect!
+      begin; @cursor_reaper.kill_cursors; rescue; end
+      @cursor_reaper.stop!
       @servers.each { |server| server.disconnect! } and true
     end
 
@@ -312,7 +323,8 @@ module Mongo
     # @since 2.1.0
     def reconnect!
       scan!
-      servers.each { |server| server.reconnect! } and true
+      servers.each { |server| server.reconnect! }
+      @cursor_reaper.restart! and true
     end
 
     # Add hosts in a description to the cluster.

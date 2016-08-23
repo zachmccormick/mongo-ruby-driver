@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,6 +19,9 @@ module Mongo
       # Encapsulates behaviour around GridFS files collection file document.
       #
       # @since 2.0.0
+      #
+      # @deprecated Please use the 'stream' API on a FSBucket instead.
+      #   Will be removed in driver version 3.0.
       class Info
 
         # Name of the files collection.
@@ -193,12 +196,13 @@ module Mongo
         # @example Convert the file information document to BSON.
         #   file_info.to_bson
         #
-        # @param [ String ] encoded The encoded data to append to.
+        # @param [ BSON::ByteBuffer ] buffer The encoded BSON buffer to append to.
+        # @param [ true, false ] validating_keys Whether keys should be validated when serializing.
         #
         # @return [ String ] The raw BSON data.
         #
         # @since 2.0.0
-        def to_bson(buffer = BSON::ByteBuffer.new, validating_keys = nil)
+        def to_bson(buffer = BSON::ByteBuffer.new, validating_keys = BSON::Config.validating_keys?)
           document[:md5] ||= @client_md5.hexdigest
           document.to_bson(buffer)
         end

@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2015 MongoDB, Inc.
+# Copyright (C) 2014-2016 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -133,9 +133,7 @@ module Mongo
           #
           # @since 2.1.0
           def read_preference
-            @read_preference ||= @options[:read] ?
-                ServerSelector.get(Options::Redacted.new((@options[:read] || {}).merge(fs.options))) :
-                fs.read_preference
+            @read_preference ||= ServerSelector.get(@options[:read] || fs.read_preference)
           end
 
           # Get the files collection file information document for the file being read.
