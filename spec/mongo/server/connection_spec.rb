@@ -14,8 +14,14 @@ describe Mongo::Server::Connection do
     Mongo::Event::Listeners.new
   end
 
+  let(:app_metadata) do
+    Mongo::Cluster::AppMetadata.new(authorized_client.cluster)
+  end
+
   let(:cluster) do
-    double('cluster')
+    double('cluster').tap do |cl|
+      allow(cl).to receive(:app_metadata).and_return(app_metadata)
+    end
   end
 
   let(:server) do
@@ -59,7 +65,7 @@ describe Mongo::Server::Connection do
     context 'when no socket exists' do
 
       let(:connection) do
-        described_class.new(server)
+        described_class.new(server, server.options)
       end
 
       let!(:result) do
@@ -86,7 +92,7 @@ describe Mongo::Server::Connection do
     context 'when a socket exists' do
 
       let(:connection) do
-        described_class.new(server)
+        described_class.new(server, server.options)
       end
 
       before do
@@ -163,7 +169,7 @@ describe Mongo::Server::Connection do
     context 'when a socket is not connected' do
 
       let(:connection) do
-        described_class.new(server)
+        described_class.new(server, server.options)
       end
 
       it 'does not raise an error' do
@@ -174,7 +180,7 @@ describe Mongo::Server::Connection do
     context 'when a socket is connected' do
 
       let(:connection) do
-        described_class.new(server)
+        described_class.new(server, server.options)
       end
 
       before do
@@ -400,6 +406,41 @@ describe Mongo::Server::Connection do
       end
     end
 
+    context 'when a socket timeout is set' do
+
+      let(:connection) do
+        described_class.new(server, socket_timeout: 10)
+      end
+
+      it 'sets the timeout' do
+        expect(connection.timeout).to eq(10)
+      end
+
+      let(:client) do
+        authorized_client.with(socket_timeout: 1.5)
+      end
+
+      before do
+        authorized_collection.insert_one(a: 1)
+      end
+
+      after do
+        sleep(0.5)
+        authorized_collection.delete_many
+      end
+
+      it 'raises a timeout when it expires' do
+        start = Time.now
+        expect {
+          Timeout::timeout(3) do
+            client[authorized_collection.name].find("$where" => "sleep(2000) || true").first
+          end
+        }.to raise_exception(Timeout::Error, "Took more than 1.5 seconds to receive data.")
+        end_time = Time.now
+        expect(end_time - start).to be_within(0.2).of(1.5)
+      end
+    end
+
     context 'when the process is forked' do
 
       let(:insert) do
@@ -431,7 +472,7 @@ describe Mongo::Server::Connection do
     context 'when host and port are provided' do
 
       let(:connection) do
-        described_class.new(server)
+        described_class.new(server, server.options)
       end
 
       it 'sets the address' do
@@ -442,8 +483,8 @@ describe Mongo::Server::Connection do
         expect(connection.send(:socket)).to be_nil
       end
 
-      it 'sets the timeout to the default' do
-        expect(connection.timeout).to eq(5)
+      it 'does not set the timeout to the default' do
+        expect(connection.timeout).to be_nil
       end
     end
 
@@ -535,7 +576,7 @@ describe Mongo::Server::Connection do
   describe '#auth_mechanism' do
 
     let(:connection) do
-      described_class.new(server)
+      described_class.new(server, server.options)
     end
 
     let(:reply) do
@@ -550,20 +591,15 @@ describe Mongo::Server::Connection do
 
     context 'when the ismaster response indicates the auth mechanism is :scram' do
 
-      let(:ismaster) do
-        {
-            'maxWireVersion' => 3,
-            'minWireVersion' => 0,
-            'ok' => 1
-        }
+      let(:features) do
+        Mongo::Server::Description::Features.new(0..3)
       end
 
       context 'when the server auth mechanism is scram', if: scram_sha_1_enabled? do
 
         it 'uses scram' do
-          socket = connection.instance_variable_get(:@socket)
-          max_message_size = connection.send(:max_message_size)
-          allow(Mongo::Protocol::Reply).to receive(:deserialize).with(socket, max_message_size).and_return(reply)
+          allow(Mongo::Server::Description::Features).to receive(:new).and_return(features)
+          connection.send(:handshake!)
           expect(connection.send(:default_mechanism)).to eq(:scram)
         end
       end
@@ -571,9 +607,8 @@ describe Mongo::Server::Connection do
       context 'when the server auth mechanism is the default (mongodb_cr)', unless: scram_sha_1_enabled?  do
 
         it 'uses scram' do
-          socket = connection.instance_variable_get(:@socket)
-          max_message_size = connection.send(:max_message_size)
-          allow(Mongo::Protocol::Reply).to receive(:deserialize).with(socket, max_message_size).and_return(reply)
+          allow(Mongo::Server::Description::Features).to receive(:new).and_return(features)
+          connection.send(:handshake!)
           expect(connection.send(:default_mechanism)).to eq(:scram)
         end
       end
@@ -581,20 +616,15 @@ describe Mongo::Server::Connection do
 
     context 'when the ismaster response indicates the auth mechanism is :mongodb_cr' do
 
-      let(:ismaster) do
-        {
-            'maxWireVersion' => 2,
-            'minWireVersion' => 0,
-            'ok' => 1
-        }
+      let(:features) do
+        Mongo::Server::Description::Features.new(0..2)
       end
 
       context 'when the server auth mechanism is scram', if: scram_sha_1_enabled? do
 
         it 'uses scram' do
-          socket = connection.instance_variable_get(:@socket)
-          max_message_size = connection.send(:max_message_size)
-          allow(Mongo::Protocol::Reply).to receive(:deserialize).with(socket, max_message_size).and_return(reply)
+          allow(Mongo::Server::Description::Features).to receive(:new).and_return(features)
+          connection.send(:handshake!)
           expect(connection.send(:default_mechanism)).to eq(:scram)
         end
       end
@@ -602,9 +632,8 @@ describe Mongo::Server::Connection do
       context 'when the server auth mechanism is the default (mongodb_cr)', unless: scram_sha_1_enabled?  do
 
         it 'uses mongodb_cr' do
-          socket = connection.instance_variable_get(:@socket)
-          max_message_size = connection.send(:max_message_size)
-          allow(Mongo::Protocol::Reply).to receive(:deserialize).with(socket, max_message_size).and_return(reply)
+          allow(Mongo::Server::Description::Features).to receive(:new).and_return(features)
+          connection.send(:handshake!)
           expect(connection.send(:default_mechanism)).to eq(:mongodb_cr)
         end
       end

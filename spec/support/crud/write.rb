@@ -47,16 +47,9 @@ module Mongo
                         :return_document => 'returnDocument',
                         :upsert => 'upsert',
                         :ordered => 'ordered',
-                        :write_concern => 'writeConcern'
+                        :write_concern => 'writeConcern',
+                        :collation => 'collation'
                        }
-
-        # Operations that need a check if results on < 2.6 will match.
-        #
-        # @since 2.0.0
-        REQUIRES_2_6 = ['findOneAndReplace',
-                        'updateMany',
-                        'updateOne',
-                        'replaceOne']
 
         # The operation name.
         #
@@ -97,22 +90,6 @@ module Mongo
           send(OPERATIONS[name], collection)
         end
 
-        # Whether this operation requires >= 2.6 to be tested.
-        #
-        # @example Determine whether this operation requires >= 2.6.
-        #   operation.requires_2_6?(collection)
-        #
-        # @param [ Collection ] collection The collection the operation
-        #   should be executed on.
-        #
-        # @return [ true, false ] Whether this operation requires 2.6
-        #   to be tested.
-        #
-        # @since 2.0.0
-        def requires_2_6?(collection)
-          REQUIRES_2_6.include?(name) && upsert
-        end
-
         private
 
         def bulk_write(collection)
@@ -120,12 +97,12 @@ module Mongo
         end
 
         def delete_many(collection)
-          result = collection.delete_many(filter)
+          result = collection.delete_many(filter, options)
           { 'deletedCount' => result.deleted_count }
         end
 
         def delete_one(collection)
-          result = collection.delete_one(filter)
+          result = collection.delete_one(filter, options)
           { 'deletedCount' => result.deleted_count }
         end
 
@@ -176,6 +153,10 @@ module Mongo
           ARGUMENT_MAP.reduce({}) do |opts, (key, value)|
             arguments.key?(value) ? opts.merge!(key => send(key)) : opts
           end
+        end
+
+        def collation
+          arguments['collation']
         end
 
         def replacement

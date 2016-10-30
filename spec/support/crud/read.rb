@@ -28,8 +28,19 @@ module Mongo
         ARGUMENT_MAP = { :sort => 'sort',
                          :skip => 'skip',
                          :batch_size => 'batchSize',
-                         :limit => 'limit'
+                         :limit => 'limit',
+                         :collation => 'collation'
                        }
+
+        # Map of read preference mode names to their equivalent Ruby-formatted symbols.
+        #
+        # @since 2.4.0
+        READ_PREFERENCE_MAP = { 'primary' => :primary,
+                                'secondary' => :secondary,
+                                'primaryPreferred' => :primary_preferred,
+                                'secondaryPreferred' => :secondary_preferred,
+                                'nearest' => :nearest
+                              }
 
         # The operation name.
         #
@@ -75,21 +86,6 @@ module Mongo
               pipeline.find {|op| op.keys.include?('$out') })
         end
 
-        # Whether the operation requires server version >= 2.6 for its results to
-        # match expected results.
-        #
-        # @example Whether the operation requires >= 2.6 for its results to match.
-        #   operation.requires_2_6?(collection)
-        #
-        # @param [ Collection ] collection The collection the operation is executed on.
-        #
-        # @return [ true, false ] If the operation requires 2.6 for its results to match.
-        #
-        # @since 2.0.0
-        def requires_2_6?(collection)
-          name == 'aggregate' && pipeline.find {|op| op.keys.include?('$out') }
-        end
-
         private
 
         def count(collection)
@@ -109,13 +105,18 @@ module Mongo
         end
 
         def find(collection)
-          collection.find(filter, options.merge(modifiers: BSON::Document.new(modifiers) || {})).to_a
+          opts = modifiers ? options.merge(modifiers: BSON::Document.new(modifiers)) : options
+          (read_preference ? collection.with(read: read_preference) : collection).find(filter, opts).to_a
         end
 
         def options
           ARGUMENT_MAP.reduce({}) do |opts, (key, value)|
             arguments[value] ? opts.merge!(key => arguments[value]) : opts
           end
+        end
+
+        def collation
+          arguments['collation']
         end
 
         def batch_size
@@ -140,6 +141,12 @@ module Mongo
 
         def arguments
           @spec['arguments']
+        end
+
+        def read_preference
+          if @spec['read_preference'] && @spec['read_preference']['mode']
+            { mode: READ_PREFERENCE_MAP[@spec['read_preference']['mode']] }
+          end
         end
       end
     end

@@ -4,6 +4,7 @@ CURRENT_PATH = File.expand_path(File.dirname(__FILE__))
 SERVER_DISCOVERY_TESTS = Dir.glob("#{CURRENT_PATH}/support/sdam/**/*.yml")
 SERVER_SELECTION_RTT_TESTS = Dir.glob("#{CURRENT_PATH}/support/server_selection/rtt/*.yml")
 SERVER_SELECTION_TESTS = Dir.glob("#{CURRENT_PATH}/support/server_selection/selection/**/*.yml")
+MAX_STALENESS_TESTS = Dir.glob("#{CURRENT_PATH}/support/max_staleness/**/*.yml")
 CRUD_TESTS = Dir.glob("#{CURRENT_PATH}/support/crud_tests/**/*.yml")
 COMMAND_MONITORING_TESTS = Dir.glob("#{CURRENT_PATH}/support/command_monitoring/**/*.yml")
 CONNECTION_STRING_TESTS = Dir.glob("#{CURRENT_PATH}/support/connection_string_tests/*.yml")
@@ -14,6 +15,10 @@ CLIENT_PEM = "#{SSL_CERTS_DIR}/client.pem"
 CLIENT_PASSWORD_PEM = "#{SSL_CERTS_DIR}/password_protected.pem"
 CA_PEM = "#{SSL_CERTS_DIR}/ca.pem"
 CRL_PEM = "#{SSL_CERTS_DIR}/crl.pem"
+CLIENT_KEY_PEM = "#{SSL_CERTS_DIR}/client_key.pem"
+CLIENT_CERT_PEM = "#{SSL_CERTS_DIR}/client_cert.pem"
+CLIENT_KEY_ENCRYPTED_PEM = "#{SSL_CERTS_DIR}/client_key_encrypted.pem"
+CLIENT_KEY_PASSPHRASE = "passphrase"
 
 require 'mongo'
 
@@ -122,6 +127,15 @@ end
 # @since 2.0.0
 def single_seed?
   ADDRESSES.size == 1
+end
+
+# For instances where behaviour is different on different versions, we need to
+# determine in the specs if we are 3.4 or higher.
+#
+# @since 2.4.0
+def collation_enabled?
+  $mongo_client ||= initialize_scanned_client!
+  $collation_enabled ||= $mongo_client.cluster.servers.first.features.collation_enabled?
 end
 
 # For instances where behaviour is different on different versions, we need to

@@ -48,7 +48,8 @@ module Mongo
             no_cursor_timeout: 'noCursorTimeout',
             await_data: 'awaitData',
             allow_partial_results: 'allowPartialResults',
-            read_concern: 'readConcern'
+            read_concern: 'readConcern',
+            collation: 'collation'
           ).freeze
 
           def_delegators :@view, :collection, :database, :filter, :options, :read
@@ -95,15 +96,30 @@ module Mongo
           def find_command
             document = BSON::Document.new('find' => collection.name, 'filter' => filter)
             command = Options::Mapper.transform_documents(convert_flags(options), MAPPINGS, document)
-            convert_negative_limit(command)
+            convert_limit_and_batch_size(command)
+            command
           end
 
-          def convert_negative_limit(command)
-            if command[:limit] && command[:limit] < 0
-              command['limit'] = command['limit'].abs
+          def convert_limit_and_batch_size(command)
+            if command[:limit] && command[:limit] < 0 &&
+                command[:batchSize] && command[:batchSize] < 0
+
+              command[:limit] = command[:limit].abs
+              command[:batchSize] = command[:limit].abs
               command[:singleBatch] = true
+
+            else
+              [:limit, :batchSize].each do |opt|
+                if command[opt]
+                  if command[opt] < 0
+                    command[opt] = command[opt].abs
+                    command[:singleBatch] = true
+                  elsif command[opt] == 0
+                    command.delete(opt)
+                  end
+                end
+              end
             end
-            command
           end
 
           def convert_flags(options)

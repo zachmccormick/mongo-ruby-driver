@@ -36,6 +36,7 @@ module Mongo
         @cursor_ids = cursor_ids
         @id_count   = @cursor_ids.size
         @upconverter = Upconverter.new(collection, cursor_ids)
+        super
       end
 
       # Return the event payload for monitoring.
@@ -55,9 +56,11 @@ module Mongo
         }
       end
 
-      private
+      protected
 
       attr_reader :upconverter
+
+      private
 
       # The operation code required to specify +KillCursors+ message.
       # @return [Fixnum] the operation code.
