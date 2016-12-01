@@ -10,12 +10,12 @@ describe 'Server Selection' do
 
     context(spec.description) do
 
-      let(:topology) do
-        spec.type.new({})
+      let(:monitoring) do
+        Mongo::Monitoring.new(monitoring: false)
       end
 
-      let(:monitoring) do
-        Mongo::Monitoring.new
+      let(:topology) do
+        spec.type.new({}, monitoring)
       end
 
       let(:listeners) do
@@ -28,6 +28,7 @@ describe 'Server Selection' do
           allow(c).to receive(:single?).and_return(topology.single?)
           allow(c).to receive(:sharded?).and_return(topology.sharded?)
           allow(c).to receive(:replica_set?).and_return(topology.replica_set?)
+          allow(c).to receive(:unknown?).and_return(topology.unknown?)
           allow(c).to receive(:app_metadata).and_return(app_metadata)
         end
       end

@@ -38,6 +38,11 @@ module Mongo
     # @since 2.0.0
     SERVER_SELECTION_TIMEOUT = 30.freeze
 
+    # The smallest allowed max staleness value, in seconds.
+    #
+    # @since 2.4.0
+    SMALLEST_MAX_STALENESS_SECONDS = 90
+
     # Primary read preference.
     #
     # @since 2.1.0
@@ -48,11 +53,11 @@ module Mongo
     #
     # @since 2.0.0
     PREFERENCES = {
-        nearest: Nearest,
-        primary: Primary,
-        primary_preferred: PrimaryPreferred,
-        secondary: Secondary,
-        secondary_preferred: SecondaryPreferred
+      nearest: Nearest,
+      primary: Primary,
+      primary_preferred: PrimaryPreferred,
+      secondary: Secondary,
+      secondary_preferred: SecondaryPreferred
     }.freeze
 
     # Create a server selector object.
