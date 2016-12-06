@@ -52,7 +52,7 @@ module Mongo
         auth_error = e.kind_of?(Mongo::Auth::Unauthorized)
         assertion_256 = operation_failure && e.message.include?("assertion src/mongo/util/net/message.h:256")
         sleep_multiplier = 1
-        if connection_error || auth_error || (operation_failure && e.unauthorized?) || assertion_256
+        if connection_error || auth_error || (operation_failure && (e.unauthorized? || e.retryable?)) || assertion_256
           rescan!
         end
 

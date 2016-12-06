@@ -203,6 +203,7 @@ describe Mongo::Retryable do
           context 'when the retry succeeds' do
 
             before do
+              allow(cluster).to receive(:disconnect!)
               expect(operation).to receive(:execute).and_raise(error).ordered
               allow(cluster).to receive(:sharded?).and_return(true)
               expect(cluster).to receive(:max_read_retries).and_return(1).ordered
@@ -219,6 +220,7 @@ describe Mongo::Retryable do
           context 'when the retry fails once and then succeeds' do
 
             before do
+              allow(cluster).to receive(:disconnect!)
               expect(operation).to receive(:execute).and_raise(error).ordered
               allow(cluster).to receive(:sharded?).and_return(true)
               expect(cluster).to receive(:max_read_retries).and_return(2).ordered

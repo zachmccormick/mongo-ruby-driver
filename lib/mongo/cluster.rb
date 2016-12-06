@@ -202,6 +202,10 @@ module Mongo
       end
     end
 
+    def restart_cursor_reaper
+      @cursor_reaper.restart!
+    end
+
     # Get the nicer formatted string for use in inspection.
     #
     # @example Inspect the cluster.

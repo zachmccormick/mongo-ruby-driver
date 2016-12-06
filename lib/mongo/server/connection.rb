@@ -66,6 +66,7 @@ module Mongo
           socket.connect!
           handshake!
           authenticate!
+          @server.cluster.restart_cursor_reaper()
         end
         true
       end
