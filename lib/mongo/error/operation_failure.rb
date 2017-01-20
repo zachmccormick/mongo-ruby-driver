@@ -63,7 +63,7 @@ module Mongo
       end
 
       def unauthorized?
-        UNAUTHORIZED_MESSAGES.any?{ |m| message.include?(m) }
+        UNAUTHORIZED_MESSAGES.any?{ |m| message.include?(m) } && !message.include?("E11000 duplicate key".freeze)
       end
     end
   end
