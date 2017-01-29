@@ -206,6 +206,10 @@ module Mongo
       @cursor_reaper.restart!
     end
 
+    def restart_server_monitors
+      servers.each { |server| server.monitor.restart! }
+    end
+
     # Get the nicer formatted string for use in inspection.
     #
     # @example Inspect the cluster.

@@ -67,6 +67,7 @@ module Mongo
           handshake!
           authenticate!
           @server.cluster.restart_cursor_reaper()
+          @server.cluster.restart_server_monitors()
         end
         true
       end
