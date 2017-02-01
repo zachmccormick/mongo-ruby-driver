@@ -35,6 +35,7 @@ module Mongo
     #
     # @since 2.0.0
     TIMEOUT_ERROR = 'Socket request timed out'.freeze
+    TIMEOUT_ERROR_WITH_HOST = 'Socket request timed out on %s'.freeze
 
     # The pack directive for timeouts.
     #
@@ -119,6 +120,7 @@ module Mongo
     #
     # @since 2.0.0
     def read(length)
+
       handle_errors do
         data = read_from_socket(length)
         raise IOError unless (data.length > 0 || length == 0)
@@ -198,7 +200,11 @@ module Mongo
       begin
         yield
       rescue Errno::ETIMEDOUT
-        raise Error::SocketTimeoutError, TIMEOUT_ERROR
+        if defined?(host) && defined?(port)
+          raise Error::SocketTimeoutError, TIMEOUT_ERROR_WITH_HOST % "#{host}:#{port}"
+        else
+          raise Error::SocketTimeoutError, TIMEOUT_ERROR
+        end
       rescue IOError, SystemCallError => e
         raise Error::SocketError, e.message
       rescue OpenSSL::SSL::SSLError
