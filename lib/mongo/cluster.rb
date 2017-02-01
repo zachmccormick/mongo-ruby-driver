@@ -207,7 +207,8 @@ module Mongo
     end
 
     def restart_server_monitors
-      servers.each { |server| server.monitor.restart! }
+      # For now, do nothing while we work on this issue with the mongoS
+      # servers.each { |server| server.monitor.restart! }
     end
 
     # Get the nicer formatted string for use in inspection.
