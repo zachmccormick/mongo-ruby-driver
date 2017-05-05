@@ -239,7 +239,13 @@ module Mongo
     #
     # @since 2.3.0
     def with_connection(&block)
-      pool.with_connection(&block)
+      pool.with_connection do |connection|
+        # Check if we need to authenticate
+        if !connection.authentication_by_db[options[:database]]
+          connection.authenticate!(options)
+        end
+        block.call(connection)
+      end
     end
 
     # Handle authentication failure.
