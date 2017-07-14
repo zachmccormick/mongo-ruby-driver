@@ -50,7 +50,8 @@ module Mongo
         'no progress was made executing batch write op',
         'dbclient error communicating with server',
         'Failed to call say, no good nodes',
-        'assertion src/mongo/util/net/message.h:256'
+        'assertion src/mongo/util/net/message.h:256',
+        'Shutdown in progress'
       ].freeze
 
       UNAUTHORIZED_MESSAGES = [
