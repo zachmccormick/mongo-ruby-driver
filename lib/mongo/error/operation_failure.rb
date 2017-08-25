@@ -51,7 +51,8 @@ module Mongo
         'dbclient error communicating with server',
         'Failed to call say, no good nodes',
         'assertion src/mongo/util/net/message.h:256',
-        'Shutdown in progress'
+        'Shutdown in progress',
+        'could not find host matching read preference { mode: "primary"'
       ].freeze
 
       UNAUTHORIZED_MESSAGES = [
