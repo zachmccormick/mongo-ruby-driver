@@ -27,7 +27,8 @@ module Mongo
         'no master',
         'not master',
         'could not contact primary',
-        'Not primary'
+        'Not primary',
+        'Primary stepped down while waiting for replication'
       ].freeze
 
       # These are magic error messages that could indicate a cluster
