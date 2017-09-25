@@ -390,6 +390,10 @@ module Mongo
       @cursor_reaper.restart! and true
     end
 
+    def restart_cursor_reaper
+      @cursor_reaper.restart!
+    end
+
     # Add hosts in a description to the cluster.
     #
     # @example Add hosts in a description to the cluster.

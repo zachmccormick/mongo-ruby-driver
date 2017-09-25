@@ -51,7 +51,9 @@ module Mongo
         sleep_multiplier = 1
 
         if connection_error || auth_error || (operation_failure && (e.unauthorized? || e.retryable?))
-          cluster.scan!
+          # Reconnect will re-scan, which uses the Connection for the Monitor thread. As such, it will restart the
+          # monitor thread to continue to scan for updated mongoS
+          cluster.reconnect!
         end
 
         if (operation_failure && e.unauthorized?) || auth_error
@@ -156,7 +158,9 @@ module Mongo
             Mongo::Logger.logger.warn("[jontest] got no server available in write on #{cluster.servers.inspect}, will retry one more time")
             attempt = cluster.max_read_retries - 1
           end
-          cluster.scan!
+          # Reconnect will re-scan, which uses the Connection for the Monitor thread. As such, it will restart the
+          # monitor thread to continue to scan for updated mongoS
+          cluster.reconnect!
         end
 
         if (operation_failure && e.unauthorized?) || auth_error
