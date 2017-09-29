@@ -53,6 +53,7 @@ module Mongo
         'Failed to call say, no good nodes',
         'assertion src/mongo/util/net/message.h:256',
         'Shutdown in progress',
+        'shutdown in progress',
         'could not find host matching read preference { mode: "primary"',
         '(11600)'
       ].freeze
