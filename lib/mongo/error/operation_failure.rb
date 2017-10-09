@@ -55,7 +55,10 @@ module Mongo
         'Shutdown in progress',
         'shutdown in progress',
         'could not find host matching read preference { mode: "primary"',
-        '(11600)'
+        # InterruptedAtShutdown
+        '(11600)',
+        # NotMasterOrSecondary
+        '(13436)'
       ].freeze
 
       UNAUTHORIZED_MESSAGES = [
