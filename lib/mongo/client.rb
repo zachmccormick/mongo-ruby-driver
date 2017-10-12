@@ -56,6 +56,7 @@ module Mongo
       :socket_timeout,
       :share_connection,
       :always_use_scram,
+      :disconnect_monitor,
       :ssl,
       :ssl_ca_cert,
       :ssl_ca_cert_string,
