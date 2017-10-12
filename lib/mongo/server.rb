@@ -173,7 +173,7 @@ module Mongo
       monitor.scan!
       # We want to be able to selectively control whether or not we disconnect the monitor so we can lower
       # connections to the mongoS on a per-Client basis
-      if @options[:disconnect_monitor]
+      if @options[:disconnect_monitor] || @options['disconnect_monitor']
         monitor.stop!
       else
         monitor.run!
