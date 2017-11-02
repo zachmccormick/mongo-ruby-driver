@@ -57,6 +57,8 @@ module Mongo
         'could not find host matching read preference { mode: "primary"',
         # InterruptedAtShutdown
         '(11600)',
+        # "operation was interrupted"
+        '(11602)',
         # NotMasterOrSecondary
         '(13436)'
       ].freeze
