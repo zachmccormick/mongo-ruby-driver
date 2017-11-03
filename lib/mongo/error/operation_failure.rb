@@ -60,7 +60,8 @@ module Mongo
         # "operation was interrupted"
         '(11602)',
         # NotMasterOrSecondary
-        '(13436)'
+        '(13436)',
+        'error reading response'
       ].freeze
 
       UNAUTHORIZED_MESSAGES = [
