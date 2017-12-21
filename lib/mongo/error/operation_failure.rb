@@ -51,6 +51,7 @@ module Mongo
         'no progress was made executing batch write op',
         'dbclient error communicating with server',
         'Failed to call say, no good nodes',
+        'Failed to do query, no good nodes',
         'assertion src/mongo/util/net/message.h:256',
         'Shutdown in progress',
         'shutdown in progress',
