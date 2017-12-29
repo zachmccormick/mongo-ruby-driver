@@ -62,7 +62,8 @@ module Mongo
         '(11602)',
         # NotMasterOrSecondary
         '(13436)',
-        'error reading response'
+        'error reading response',
+        'network error while attempting to run'
       ].freeze
 
       UNAUTHORIZED_MESSAGES = [
