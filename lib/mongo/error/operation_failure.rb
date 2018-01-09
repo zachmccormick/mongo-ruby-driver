@@ -63,7 +63,8 @@ module Mongo
         # NotMasterOrSecondary
         '(13436)',
         'error reading response',
-        'network error while attempting to run'
+        'network error while attempting to run',
+        "Can't use connection pool during shutdown"
       ].freeze
 
       UNAUTHORIZED_MESSAGES = [
