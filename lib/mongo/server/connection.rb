@@ -59,6 +59,9 @@ module Mongo
       # @since 2.5.0
       attr_reader :last_checkin
 
+      # Stores booleans of which databases we have authenticated against
+      attr_reader :authentication_by_db
+
       def_delegators :@server,
                      :features,
                      :max_bson_object_size,
@@ -86,6 +89,7 @@ module Mongo
           address.connect_socket!(socket)
           handshake!
           authenticate!
+          @server.cluster.restart_cursor_reaper()
         end
         true
       end
@@ -108,6 +112,9 @@ module Mongo
           socket.close
           @socket = nil
         end
+        @authenticated = false
+        @authentication_by_db = {}
+        @in_auth_process = {}
         true
       end
 
@@ -160,6 +167,9 @@ module Mongo
         @last_checkin = nil
         @auth_mechanism = nil
         @pid = Process.pid
+        @authenticated = false
+        @authentication_by_db = {}
+        @in_auth_process = {}
       end
 
       # Ping the connection to see if the server is responding to commands.
@@ -209,6 +219,29 @@ module Mongo
         self
       end
 
+      def authenticate!(opts = nil)
+        # The only place where authenticate! is called with nil options is in the connect! phase, but we don't want
+        # to authenticate if we have previously authenticated from a Context#with_connection
+        if opts.nil? && @in_auth_process.values.any? {|v| v}
+          return
+        end
+
+        needs_auth, authenticator = setup_authentication!(opts)
+        if needs_auth && authenticator && !@in_auth_process[authenticator.user.database]
+          # Keep track of whether or not we are authenticating against a specific database, as the
+          # monitoring lass will get called by @authenticator.login(self) and we don't want to auth more than once
+          # on this connection, as Context.with_connection is now tightly coupled to auth
+          @in_auth_process[authenticator.user.database] = true
+          @server.handle_auth_failure! do
+            authenticator.login(self)
+
+          end
+          @authenticated = true
+          @authentication_by_db[authenticator.user.database] = true
+          @in_auth_process[authenticator.user.database] = false
+        end
+      end
+
       private
 
       def deliver(messages)
@@ -227,21 +260,21 @@ module Mongo
         end
       end
 
-      def authenticate!
-        if options[:user] || options[:auth_mech]
-          user = Auth::User.new(Options::Redacted.new(:auth_mech => default_mechanism, :client_key => @client_key).merge(options))
- 
-          @server.handle_auth_failure! do
-            reply = Auth.get(user).login(self)
-            @client_key ||= user.send(:client_key) if user.mechanism == :scram
-            reply
-          end
-        end
-      end
 
       def default_mechanism
         @auth_mechanism || (@server.features.scram_sha_1_enabled? ? :scram : :mongodb_cr)
       end
+
+      def setup_authentication!(opts = nil)
+        opts ||= options
+        if opts[:user] || options[:auth_mech]
+          user = Auth::User.new(Options::Redacted.new(:auth_mech => default_mechanism, :client_key => @client_key).merge(opts))
+          @client_key ||= user.send(:client_key) if user.mechanism == :scram
+          return true, Auth.get(user)
+        end
+        return false, nil
+      end
+
 
       def write(messages, buffer = BSON::ByteBuffer.new)
         start_size = 0

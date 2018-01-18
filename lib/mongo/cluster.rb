@@ -213,8 +213,10 @@ module Mongo
     def self.finalize(pools, periodic_executor)
       proc do
         periodic_executor.stop!
-        pools.values.each do |pool|
-          pool.disconnect!
+        if !share_connection?
+          pools.values.each do |pool|
+            pool.disconnect!
+          end
         end
       end
     end
@@ -285,9 +287,22 @@ module Mongo
     #
     # @since 2.2.0
     def pool(server)
-      @pool_lock.synchronize do
-        pools[server.address] ||= Server::ConnectionPool.get(server)
+      if share_connection?
+        Mongo::SharedConnectionPool.get(server)
+      else
+        @pool_lock.synchronize do
+          pools[server.address] ||= Server::ConnectionPool.get(server)
+        end
       end
+    end
+
+    # @return Whether or not this cluster should share an existing connection to the host:ip of the cluster
+    def share_connection?
+      options[:share_connection]
+    end
+
+    def restart_cursor_reaper
+      @periodic_executor.restart!
     end
 
     # Get the interval, in seconds, in which a mongos read operation is
