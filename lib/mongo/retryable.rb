@@ -182,7 +182,7 @@ module Mongo
       begin
         attempt += 1
         yield(server || cluster.next_primary)
-      rescue Error::SocketError, Error::SocketTimeoutError, Error::OperationFailure, Error::NoServerAvailable, Mongo::Auth::Unauthorized => e
+      rescue Error::SocketError, Error::SocketTimeoutError, Error::OperationFailure, Error::NoServerAvailable, Mongo::Auth::Unauthorized, Mongo::Error => e
         connection_error = e.kind_of?(Error::SocketError) || e.kind_of?(Error::SocketTimeoutError)
         operation_failure = e.kind_of?(Error::OperationFailure)
         no_server_available = e.kind_of?(Error::NoServerAvailable)
