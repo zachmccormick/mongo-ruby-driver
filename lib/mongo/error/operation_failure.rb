@@ -64,7 +64,8 @@ module Mongo
         '(13436)',
         'error reading response',
         'network error while attempting to run',
-        "Can't use connection pool during shutdown"
+        "Can't use connection pool during shutdown",
+        "aggregate command didn't return results on host"
       ].freeze
 
       UNAUTHORIZED_MESSAGES = [
