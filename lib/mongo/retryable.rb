@@ -182,13 +182,13 @@ module Mongo
       begin
         attempt += 1
         yield(server || cluster.next_primary)
-      rescue Error::SocketError, Error::SocketTimeoutError, Error::OperationFailure, Error::NoServerAvailable, Mongo::Auth::Unauthorized, Mongo::Error => e
+      rescue Error::SocketError, Error::SocketTimeoutError, Error::OperationFailure, Error::NoServerAvailable, Mongo::Auth::Unauthorized, Mongo::Error, Mongo::Error::BulkWriteError => e
         connection_error = e.kind_of?(Error::SocketError) || e.kind_of?(Error::SocketTimeoutError)
         operation_failure = e.kind_of?(Error::OperationFailure)
         no_server_available = e.kind_of?(Error::NoServerAvailable)
         auth_error = e.kind_of?(Mongo::Auth::Unauthorized)
         not_master = e.message.include?(NOT_MASTER) || e.message.include?(NOT_CONTACT_PRIMARY)
-        batch_write = e.message.include?('no progress was made executing batch write op'.freeze)
+        batch_write = e.message.include?('no progress was made executing batch write op'.freeze) || e.kind_of?(Mongo::Error::BulkWriteError)
         write_unavailable = e.message.include?('write results unavailable'.freeze)
         sleep_multiplier = 1
         if connection_error || not_master || batch_write || no_server_available || auth_error || write_unavailable
@@ -213,7 +213,7 @@ module Mongo
           sleep_multiplier = 2
         end
 
-        if connection_error || (operation_failure && (e.retryable? || e.unauthorized?)) || no_server_available || auth_error || write_unavailable
+        if connection_error || (operation_failure && (e.retryable? || e.unauthorized?)) || no_server_available || auth_error || write_unavailable || batch_write
           # We're using max_read_retries here but if we got one of the errors that is causing us to be here, we should be retrying
           # often anyway
           if attempt < cluster.max_read_retries
