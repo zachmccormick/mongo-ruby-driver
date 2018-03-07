@@ -256,13 +256,13 @@ module Mongo
           min_wire_version = response[Description::MIN_WIRE_VERSION] || Description::LEGACY_WIRE_VERSION
           max_wire_version = response[Description::MAX_WIRE_VERSION] || Description::LEGACY_WIRE_VERSION
           features = Description::Features.new(min_wire_version..max_wire_version)
-          @auth_mechanism = (features.scram_sha_1_enabled? || @server.features.scram_sha_1_enabled?) ? :scram : :mongodb_cr
+          @auth_mechanism = (features.scram_sha_1_enabled? || @server.features.scram_sha_1_enabled? || @options[:always_use_scram]) ? :scram : :mongodb_cr
         end
       end
 
 
       def default_mechanism
-        @auth_mechanism || (@server.features.scram_sha_1_enabled? ? :scram : :mongodb_cr)
+        @auth_mechanism || ((@server.features.scram_sha_1_enabled? || @options[:always_use_scram]) ? :scram : :mongodb_cr)
       end
 
       def setup_authentication!(opts = nil)
