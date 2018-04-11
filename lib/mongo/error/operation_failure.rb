@@ -29,7 +29,9 @@ module Mongo
         'not master',
         'could not contact primary',
         'Not primary',
-        'Primary stepped down while waiting for replication'
+        'Primary stepped down while waiting for replication',
+        'write results unavailable',
+        'could not find host matching read preference { mode: "primary"'
       ].freeze
 
       # These are magic error messages that could indicate a cluster
