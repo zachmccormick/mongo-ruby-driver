@@ -36,7 +36,7 @@ if ENV['MONGODB_URI']
     ADDRESSES = MONGODB_URI.servers
     CONNECT = { connect: :direct }
   end
-else # For Jenkins
+else
   ADDRESSES = ENV['MONGODB_ADDRESSES'] ? ENV['MONGODB_ADDRESSES'].split(',').freeze : [ '127.0.0.1:27017' ].freeze
   if ENV['RS_ENABLED']
     CONNECT = { connect: :replica_set, replica_set: ENV['RS_NAME'] }
@@ -166,6 +166,11 @@ AUTHORIZED_CLIENT = Mongo::Client.new(
     password: TEST_USER.password)
 )
 
+# Provides an authorized mongo client that retries writes.
+#
+# @since 2.5.1
+AUTHROIZED_CLIENT_WITH_RETRY_WRITES = AUTHORIZED_CLIENT.with(retry_writes: true)
+
 # Provides an unauthorized mongo client on the default test database.
 #
 # @since 2.0.0
@@ -195,6 +200,19 @@ ADMIN_AUTHORIZED_TEST_CLIENT = ADMIN_UNAUTHORIZED_CLIENT.with(
   monitoring: false
 )
 
+# A client that has an event subscriber for commands.
+#
+# @since 2.5.1
+SUBSCRIBED_CLIENT = Mongo::Client.new(
+    ADDRESSES,
+    TEST_OPTIONS.merge(
+        database: TEST_DB,
+        user: TEST_USER.name,
+        password: TEST_USER.password)
+)
+SUBSCRIBED_CLIENT.subscribe(Mongo::Monitoring::COMMAND, EventSubscriber)
+AUTHROIZED_CLIENT_WITH_RETRY_WRITES.subscribe(Mongo::Monitoring::COMMAND, EventSubscriber)
+
 module Authorization
 
   # On inclusion provides helpers for use with testing with and without
@@ -219,6 +237,22 @@ module Authorization
     #
     # @since 2.0.0
     context.let(:authorized_client) { AUTHORIZED_CLIENT }
+
+    # Provides an authorized mongo client on the default test database that retries writes.
+    #
+    # @since 2.5.1
+    context.let(:authorized_client_with_retry_writes) do
+      EventSubscriber.clear_events!
+      AUTHROIZED_CLIENT_WITH_RETRY_WRITES
+    end
+
+    # Provides an authorized mongo client that has a Command subscriber.
+    #
+    # @since 2.5.1
+    context.let(:subscribed_client) do
+      EventSubscriber.clear_events!
+      SUBSCRIBED_CLIENT
+    end
 
     # Provides an unauthorized mongo client on the default test database.
     #

@@ -17,13 +17,7 @@ describe 'Retryable Writes' do
           end
 
           let(:client) do
-            authorized_client.with(heartbeat_frequency: 100, retry_writes: true).tap do |cl|
-              cl.subscribe(Mongo::Monitoring::COMMAND, subscriber)
-            end
-          end
-
-          let(:subscriber) do
-            EventSubscriber.new
+            authorized_client_with_retry_writes
           end
 
           before do
@@ -348,7 +342,7 @@ describe 'Retryable Writes' do
     shared_examples_for 'an operation that does not support retryable writes' do
 
       let!(:client) do
-        authorized_client.with(retry_writes: true)
+        authorized_client_with_retry_writes
       end
 
       let!(:collection) do
@@ -375,7 +369,7 @@ describe 'Retryable Writes' do
       context 'when the client has retry_writes set to true' do
 
         let!(:client) do
-          authorized_client.with(retry_writes: true)
+          authorized_client_with_retry_writes
         end
 
         context 'when the collection has write concern acknowledged' do
@@ -450,6 +444,10 @@ describe 'Retryable Writes' do
 
         let!(:client) do
           authorized_client.with(retry_writes: false)
+        end
+
+        after do
+          client.close
         end
 
         context 'when the collection has write concern acknowledged' do

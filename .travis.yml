@@ -11,6 +11,7 @@ rvm:
   - jruby-9.1.15.0
 
 before_install:
+  - gem update --system
   - gem update bundler
 
 install: ruby -S bundle install --without release development
@@ -24,6 +25,7 @@ env:
     - MONGODB=3.0.12
     - MONGODB=3.2.11
     - MONGODB=3.4.1
+    - MONGODB=3.6.2
 
 before_script:
   - wget http://fastdl.mongodb.org/linux/mongodb-linux-x86_64-${MONGODB}.tgz -O /tmp/mongodb.tgz
@@ -45,4 +47,3 @@ branches:
 matrix:
   allow_failures:
     - rvm: ruby-head
-    - rvm: 2.5

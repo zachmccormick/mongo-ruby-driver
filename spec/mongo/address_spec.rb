@@ -214,13 +214,22 @@ describe Mongo::Address do
       address.host
     end
 
+    let(:addr_info) do
+      family = (host == 'localhost') ? ::Socket::AF_INET : ::Socket::AF_UNSPEC
+      ::Socket.getaddrinfo(host, nil, family, ::Socket::SOCK_STREAM)
+    end
+
+    let(:socket_address_or_host) do
+      (host == 'localhost') ? addr_info.first[3] : host
+    end
+
     context 'when providing a DNS entry that resolves to both IPv6 and IPv4' do
 
       before do
         address.instance_variable_set(:@resolver, nil)
         allow(::Socket).to receive(:getaddrinfo).and_return(
           [ ["AF_INET6", 0, '::1', '::1', ::Socket::AF_INET6, 1, 6],
-            ["AF_INET", 0, host, host, ::Socket::AF_INET, 1, 6]]
+            ["AF_INET", 0, socket_address_or_host, socket_address_or_host, ::Socket::AF_INET, 1, 6]]
         )
       end
 
@@ -237,7 +246,33 @@ describe Mongo::Address do
       end
 
       it 'uses the host, not the IP address' do
-        expect(address.socket(0.0).host).to eq(host)
+        expect(address.socket(0.0).host).to eq(socket_address_or_host)
+      end
+
+      let(:socket) do
+        if running_ssl?
+          address.socket(0.0, SSL_OPTIONS).instance_variable_get(:@tcp_socket)
+        else
+          address.socket(0.0).instance_variable_get(:@socket)
+        end
+      end
+
+      if Socket.const_defined?(:TCP_KEEPINTVL)
+        it 'sets the socket TCP_KEEPINTVL option' do
+          expect(socket.getsockopt(Socket::IPPROTO_TCP, Socket::TCP_KEEPINTVL).int).to be <= 10
+        end
+      end
+
+      if Socket.const_defined?(:TCP_KEEPCNT)
+        it 'sets the socket TCP_KEEPCNT option' do
+          expect(socket.getsockopt(Socket::IPPROTO_TCP, Socket::TCP_KEEPCNT).int).to be <= 9
+        end
+      end
+
+      if Socket.const_defined?(:TCP_KEEPIDLE)
+        it 'sets the socket TCP_KEEPIDLE option' do
+          expect(socket.getsockopt(Socket::IPPROTO_TCP, Socket::TCP_KEEPIDLE).int).to be <= 300
+        end
       end
     end
   end

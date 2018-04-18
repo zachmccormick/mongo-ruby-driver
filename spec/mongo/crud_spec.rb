@@ -10,6 +10,12 @@ describe 'CRUD' do
 
       spec.tests.each do |test|
 
+        around do |example|
+          if spec.server_version_satisfied?(authorized_client)
+            example.run
+          end
+        end
+
         context(test.description) do
 
           before(:each) do
@@ -25,12 +31,10 @@ describe 'CRUD' do
           end
 
           it 'returns the correct result' do
-            skip 'Test cannot be run on this server version' unless spec.server_version_satisfied?(authorized_client)
             expect(results).to match_operation_result(test)
           end
 
           it 'has the correct data in the collection', if: test.outcome_collection_data do
-            skip 'Test cannot be run on this server version' unless spec.server_version_satisfied?(authorized_client)
             results
             expect(authorized_collection.find.to_a).to match_collection_data(test)
           end

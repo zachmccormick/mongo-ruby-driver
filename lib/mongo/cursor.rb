@@ -69,7 +69,8 @@ module Mongo
       ObjectSpace.define_finalizer(self, self.class.finalize(result.cursor_id,
                                                              cluster,
                                                              kill_cursors_op_spec,
-                                                             server))
+                                                             server,
+                                                             @session))
     end
 
 
@@ -87,8 +88,11 @@ module Mongo
     # @return [ Proc ] The Finalizer.
     #
     # @since 2.3.0
-    def self.finalize(cursor_id, cluster, op_spec, server)
-      proc { cluster.schedule_kill_cursor(cursor_id, op_spec, server) }
+    def self.finalize(cursor_id, cluster, op_spec, server, session)
+      proc do
+        cluster.schedule_kill_cursor(cursor_id, op_spec, server)
+        session.end_session if session && session.implicit?
+      end
     end
 
     # Get a human-readable string representation of +Cursor+.
@@ -219,7 +223,7 @@ module Mongo
     end
 
     def end_session
-      @session.end_implicit_session if @session
+      @session.end_session if @session && @session.implicit?
     end
 
     def kill_cursors_operation
@@ -251,6 +255,7 @@ module Mongo
       @coll_name ||= result.namespace.sub("#{database.name}.", '') if result.namespace
       unregister if result.cursor_id == 0
       @cursor_id = result.cursor_id
+      end_session if !more?
       result.documents
     end
 

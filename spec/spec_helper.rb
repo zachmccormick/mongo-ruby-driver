@@ -38,6 +38,7 @@ Encoding.default_external = Encoding::UTF_8
 
 require 'support/travis'
 require 'support/matchers'
+require 'support/event_subscriber'
 require 'support/authorization'
 require 'support/server_discovery_and_monitoring'
 require 'support/server_selection_rtt'
@@ -51,7 +52,7 @@ require 'mongo/shared_connection_pool'
 
 RSpec.configure do |config|
   config.color     = true
-  #config.fail_fast = true unless ENV['CI'] || ENV['JENKINS_HOME']
+  #config.fail_fast = true unless ENV['CI']
   config.formatter = 'documentation'
   config.include(Authorization)
 
@@ -198,11 +199,18 @@ def list_command_enabled?
   $list_command_enabled ||= $mongo_client.cluster.servers.first.features.list_indexes_enabled?
 end
 
-# Is the test suite running locally (not on Travis or Jenkins).
+# Is the test suite running locally (not on Travis).
 #
 # @since 2.1.0
 def testing_ssl_locally?
-  running_ssl? && !(ENV['CI'] || ENV['JENKINS_CI'])
+  running_ssl? && !(ENV['CI'])
+end
+
+# Should tests relying on external connections be run.
+#
+# @since 2.5.1
+def test_connecting_externally?
+  !ENV['CI'] && !ENV['EXTERNAL_DISABLED']
 end
 
 # Is the test suite running on SSL.
@@ -250,66 +258,6 @@ end
 # @since 2.0.0
 def initialize_scanned_client!
   Mongo::Client.new(ADDRESSES, TEST_OPTIONS.merge(database: TEST_DB))
-end
-
-# Test event subscriber.
-#
-# @since 2.5.0
-class EventSubscriber
-
-  # The started events.
-  #
-  # @since 2.5.0
-  attr_reader :started_events
-
-  # The succeeded events.
-  #
-  # @since 2.5.0
-  attr_reader :succeeded_events
-
-  # The failed events.
-  #
-  # @since 2.5.0
-  attr_reader :failed_events
-
-  # Create the test event subscriber.
-  #
-  # @example Create the subscriber
-  #   EventSubscriber.new
-  #
-  # @since 2.5.0
-  def initialize
-    @started_events = []
-    @succeeded_events = []
-    @failed_events = []
-  end
-
-  # Cache the succeeded event.
-  #
-  # @param [ Event ] event The event.
-  #
-  # @since 2.5.0
-  def succeeded(event)
-    @succeeded_events.push(event)
-  end
-
-  # Cache the started event.
-  #
-  # @param [ Event ] event The event.
-  #
-  # @since 2.5.0
-  def started(event)
-    @started_events.push(event)
-  end
-
-  # Cache the failed event.
-  #
-  # @param [ Event ] event The event.
-  #
-  # @since 2.5.0
-  def failed(event)
-    @failed_events.push(event)
-  end
 end
 
 # require all shared examples
