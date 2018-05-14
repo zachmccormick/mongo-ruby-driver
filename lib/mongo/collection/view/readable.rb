@@ -136,16 +136,16 @@ module Mongo
           read_pref = opts[:read] || read_preference
           selector = ServerSelector.get(read_pref || server_selector)
           read_with_retry do
-            server = selector.select_server(cluster, false)
+            server = selector.select_server(cluster)
             apply_collation!(cmd, server, opts)
             with_session(opts) do |session|
-              Operation::Commands::Count.new({
-                                                   :selector => cmd,
-                                                   :db_name => database.name,
-                                                   :options => {:limit => -1},
-                                                   :read => read_pref,
-                                                   :session => session
-                                               }).execute(server)
+              Operation::Count.new({
+                                     :selector => cmd,
+                                     :db_name => database.name,
+                                     :options => {:limit => -1},
+                                     :read => read_pref,
+                                     :session => session
+                                    }).execute(server)
             end.n.to_i
           end
         end
@@ -176,16 +176,16 @@ module Mongo
           read_pref = opts[:read] || read_preference
           selector = ServerSelector.get(read_pref || server_selector)
           read_with_retry do
-            server = selector.select_server(cluster, false)
+            server = selector.select_server(cluster)
             apply_collation!(cmd, server, opts)
             with_session(opts) do |session|
-              Operation::Commands::Distinct.new({
-                                                   :selector => cmd,
-                                                   :db_name => database.name,
-                                                   :options => {:limit => -1},
-                                                   :read => read_pref,
-                                                   :session => session
-                                               }).execute(server)
+              Operation::Distinct.new({
+                                        :selector => cmd,
+                                        :db_name => database.name,
+                                        :options => {:limit => -1},
+                                        :read => read_pref,
+                                        :session => session
+                                       }).execute(server)
             end.first['values']
           end
         end
@@ -244,6 +244,9 @@ module Mongo
         # @return [ Integer, View ] The value or a new +View+.
         #
         # @since 2.0.0
+        #
+        # @deprecated This option is deprecated as of MongoDB server
+        #   version 4.0.
         def max_scan(value = nil)
           configure(:max_scan, value)
         end
@@ -380,6 +383,9 @@ module Mongo
         # @param [ true, false ] value The snapshot value.
         #
         # @since 2.0.0
+        #
+        # @deprecated This option is deprecated as of MongoDB server
+        #   version 4.0.
         def snapshot(value = nil)
           configure(:snapshot, value)
         end
@@ -473,8 +479,8 @@ module Mongo
 
         def parallel_scan(cursor_count, options = {})
           session = client.send(:get_session, @options)
-          server = server_selector.select_server(cluster, false)
-          cmd = Operation::Commands::ParallelScan.new({
+          server = server_selector.select_server(cluster)
+          cmd = Operation::ParallelScan.new({
                   :coll_name => collection.name,
                   :db_name => database.name,
                   :cursor_count => cursor_count,
@@ -483,14 +489,14 @@ module Mongo
                 }.merge!(options))
           cmd.execute(server).cursor_ids.map do |cursor_id|
             result = if server.features.find_command_enabled?
-                       Operation::Commands::GetMore.new({
+                       Operation::GetMore.new({
                          :selector => {:getMore => cursor_id,
                                        :collection => collection.name},
                          :db_name => database.name,
                          :session => session
                        }).execute(server)
                      else
-                       Operation::Read::GetMore.new({
+                       Operation::GetMore.new({
                          :to_return => 0,
                          :cursor_id => cursor_id,
                          :db_name => database.name,

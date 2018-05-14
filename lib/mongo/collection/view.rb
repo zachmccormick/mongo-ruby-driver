@@ -122,13 +122,14 @@ module Mongo
       # @option options :limit [ Integer ] Max number of docs to return.
       # @option options :max_scan [ Integer ] Constrain the query to only scan the
       #   specified number of docs. Use to prevent queries from running too long.
+      #   Deprecated as of MongoDB server version 4.0.
       # @option options :read [ Symbol ] The read preference to use for the query.
       #   If none is provided, the collection's default read preference is used.
       # @option options :show_disk_loc [ true, false ] Return disk location info as
       #   a field in each doc.
       # @option options :skip [ Integer ] The number of documents to skip.
       # @option options :snapshot [ true, false ] Prevents returning a doc more than
-      #   once.
+      #   once. Deprecated as of MongoDB server version 4.0.
       # @option options :sort [ Hash ] The key and direction pairs used to sort the
       #   results.
       # @option options [ Hash ] :collation The collation to use.
