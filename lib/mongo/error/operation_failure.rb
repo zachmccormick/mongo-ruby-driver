@@ -31,7 +31,8 @@ module Mongo
         'Not primary',
         'Primary stepped down while waiting for replication',
         'write results unavailable',
-        'could not find host matching read preference { mode: "primary"'
+        'could not find host matching read preference { mode: "primary"',
+        'stepdown request while waiting for replication'
       ].freeze
 
       # These are magic error messages that could indicate a cluster
