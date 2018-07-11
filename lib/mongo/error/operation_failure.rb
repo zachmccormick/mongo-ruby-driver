@@ -31,7 +31,7 @@ module Mongo
         'Not primary',
         'Primary stepped down while waiting for replication',
         'write results unavailable',
-        'could not find host matching read preference { mode: "primary"',
+        'could not find host matching read preference',
         'stepdown request while waiting for replication'
       ].freeze
 
@@ -59,7 +59,7 @@ module Mongo
         'assertion src/mongo/util/net/message.h:256',
         'Shutdown in progress',
         'shutdown in progress',
-        'could not find host matching read preference { mode: "primary"',
+        'could not find host matching read preference',
         # InterruptedAtShutdown
         '(11600)',
         # "operation was interrupted"
