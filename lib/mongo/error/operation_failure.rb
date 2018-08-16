@@ -45,6 +45,7 @@ module Mongo
         'transport error',
         'socket exception',
         "can't connect",
+        'end of file',
         'connect failed',
         'error querying',
         'could not get last error',
