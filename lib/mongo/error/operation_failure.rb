@@ -33,7 +33,7 @@ module Mongo
         'write results unavailable',
         'could not find host matching read preference',
         'stepdown request while waiting for replication'
-      ].freeze
+      ].map(&:downcase).freeze
 
       # These are magic error messages that could indicate a cluster
       # reconfiguration behind a mongos. We cannot check error codes as they
@@ -70,7 +70,7 @@ module Mongo
         'network error while attempting to run',
         "Can't use connection pool during shutdown",
         "aggregate command didn't return results on host"
-      ].freeze
+      ].map(&:downcase).freeze
 
       UNAUTHORIZED_MESSAGES = [
         'unauthorized',
@@ -88,11 +88,11 @@ module Mongo
       #
       # @since 2.1.1
       def retryable?
-        RETRY_MESSAGES.any?{ |m| message.include?(m) }
+        RETRY_MESSAGES.any?{ |m| message.downcase.include?(m) }
       end
 
       def unauthorized?
-        UNAUTHORIZED_MESSAGES.any?{ |m| message.include?(m) } && !message.include?("E11000 duplicate key".freeze)
+        UNAUTHORIZED_MESSAGES.any?{ |m| message.downcase.include?(m) } && !message.downcase.include?("E11000 duplicate key".freeze)
       end
 
       # Can the write operation that caused the error be retried?
@@ -104,7 +104,7 @@ module Mongo
       #
       # @since 2.4.2
       def write_retryable?
-        WRITE_RETRY_MESSAGES.any? { |m| message.include?(m) }
+        WRITE_RETRY_MESSAGES.any? { |m| message.downcase.include?(m) }
       end
 
       # Create the operation failure.
