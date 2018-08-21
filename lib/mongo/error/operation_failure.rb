@@ -93,7 +93,7 @@ module Mongo
       end
 
       def unauthorized?
-        UNAUTHORIZED_MESSAGES.any?{ |m| message.downcase.include?(m) } && !message.downcase.include?("E11000 duplicate key".freeze)
+        UNAUTHORIZED_MESSAGES.any?{ |m| message.downcase.include?(m) } && !message.downcase.include?("e11000 duplicate key".freeze)
       end
 
       # Can the write operation that caused the error be retried?
