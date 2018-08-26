@@ -32,7 +32,8 @@ module Mongo
         'Primary stepped down while waiting for replication',
         'write results unavailable',
         'could not find host matching read preference',
-        'stepdown request while waiting for replication'
+        'stepdown request while waiting for replication',
+        'demoted from primary while performing update'
       ].map(&:downcase).freeze
 
       # These are magic error messages that could indicate a cluster
