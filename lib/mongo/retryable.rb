@@ -44,16 +44,18 @@ module Mongo
         attempt += 1
         yield
       rescue Error::SocketError, Error::SocketTimeoutError => e
-        raise(e) if attempt > cluster.max_read_retries || (session && session.in_transaction?)
+        max_read_retries = cluster.max_read_retries
+        raise(e) if attempt > max_read_retries || (session && session.in_transaction?)
         log_retry(e)
-        Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}, max retries is #{cluster.max_read_retries}")
+        Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}, max retries is #{max_read_retries}")
         cluster.scan!
         retry
       rescue Error::OperationFailure => e
         if cluster.sharded? && e.retryable? && !(session && session.in_transaction?)
-          raise(e) if attempt > cluster.max_read_retries
+          max_read_retries = cluster.max_read_retries
+          raise(e) if attempt > max_read_retries
           log_retry(e)
-          Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}, max retries is #{cluster.max_read_retries}")
+          Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}, max retries is #{max_read_retries}")
           sleep(cluster.read_retry_interval)
           retry
         else
@@ -184,7 +186,7 @@ module Mongo
 
         server = nil
         raise(e) if attempt > cluster.max_read_retries
-        if e.write_retryable? && !(session && session.in_transaction?)
+        if e.respond_to?(:write_retryable?) && e.write_retryable? && !(session && session.in_transaction?)
           log_retry(e)
           cluster.scan!
           retry
