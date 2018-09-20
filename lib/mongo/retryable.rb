@@ -46,12 +46,14 @@ module Mongo
       rescue Error::SocketError, Error::SocketTimeoutError => e
         raise(e) if attempt > cluster.max_read_retries || (session && session.in_transaction?)
         log_retry(e)
+        Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}, max retries is #{cluster.max_read_retries}")
         cluster.scan!
         retry
       rescue Error::OperationFailure => e
         if cluster.sharded? && e.retryable? && !(session && session.in_transaction?)
           raise(e) if attempt > cluster.max_read_retries
           log_retry(e)
+          Mongo::Logger.logger.warn("[jontest] got error for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}, max retries is #{cluster.max_read_retries}")
           sleep(cluster.read_retry_interval)
           retry
         else
@@ -156,9 +158,32 @@ module Mongo
       begin
         attempt += 1
         yield(server || cluster.next_primary)
-      rescue Error::OperationFailure => e
+      rescue Error::SocketError, Error::SocketTimeoutError, Error::OperationFailure, Error::NoServerAvailable, Mongo::Error, Mongo::Error::BulkWriteError => e
+        connection_error = e.kind_of?(Error::SocketError) || e.kind_of?(Error::SocketTimeoutError)
+        operation_failure = e.kind_of?(Error::OperationFailure)
+        no_server_available = e.kind_of?(Error::NoServerAvailable)
+        not_master = e.message.include?('not master'.freeze) || e.message.include?('could not contact primary'.freeze)
+        batch_write = e.message.include?('no progress was made executing batch write op'.freeze) || e.kind_of?(Mongo::Error::BulkWriteError)
+        write_unavailable = e.message.include?('write results unavailable'.freeze)
+
+        if connection_error || not_master || batch_write || no_server_available || write_unavailable || operation_failure
+          if connection_error
+            Mongo::Logger.logger.warn("[jontest] got connection error in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          elsif not_master
+            Mongo::Logger.logger.warn("[jontest] got not master in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          elsif batch_write
+            Mongo::Logger.logger.warn("[jontest] got batch write failure in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          elsif write_unavailable
+            Mongo::Logger.logger.warn("[jontest] got write unavailable in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          elsif no_server_available
+            Mongo::Logger.logger.warn("[jontest] got no server available in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          elsif operation_failure
+            Mongo::Logger.logger.warn("[jontest] got operation failure in write on #{cluster.servers.inspect}, attempt #{attempt}")
+          end
+        end
+
         server = nil
-        raise(e) if attempt > Cluster::MAX_WRITE_RETRIES
+        raise(e) if attempt > cluster.max_read_retries
         if e.write_retryable? && !(session && session.in_transaction?)
           log_retry(e)
           cluster.scan!
@@ -171,7 +196,7 @@ module Mongo
 
     # Log a warning so that any application slow down is immediately obvious.
     def log_retry(e)
-      Logger.logger.warn "Retry due to: #{e.class.name} #{e.message}"
+      Logger.logger.warn "[jontest] Retry due to: #{e.class.name} #{e.message}"
     end
   end
 end
