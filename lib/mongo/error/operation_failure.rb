@@ -54,6 +54,7 @@ module Mongo
         'interrupted at shutdown',
         'unknown replica set',
         'dbclient error communicating with server',
+        'Server is shutting down',
         'no progress was made executing batch write op',
         'dbclient error communicating with server',
         'Failed to call say, no good nodes',
