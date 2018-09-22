@@ -167,6 +167,10 @@ module Mongo
         not_master = e.message.include?('not master'.freeze) || e.message.include?('could not contact primary'.freeze)
         batch_write = e.message.include?('no progress was made executing batch write op'.freeze) || e.kind_of?(Mongo::Error::BulkWriteError)
         write_unavailable = e.message.include?('write results unavailable'.freeze)
+        pk_violation = e.message.include?("E11000".freeze)
+        if pk_violation
+          raise e
+        end
 
         if connection_error || not_master || batch_write || no_server_available || write_unavailable || operation_failure
           if connection_error
