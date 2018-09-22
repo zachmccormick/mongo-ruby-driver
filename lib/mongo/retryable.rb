@@ -170,17 +170,17 @@ module Mongo
 
         if connection_error || not_master || batch_write || no_server_available || write_unavailable || operation_failure
           if connection_error
-            Mongo::Logger.logger.warn("[jontest] got connection error in write on #{cluster.servers.inspect}, attempt #{attempt}")
+            Mongo::Logger.logger.warn("[jontest] got connection error in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
           elsif not_master
-            Mongo::Logger.logger.warn("[jontest] got not master in write on #{cluster.servers.inspect}, attempt #{attempt}")
+            Mongo::Logger.logger.warn("[jontest] got not master in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
           elsif batch_write
-            Mongo::Logger.logger.warn("[jontest] got batch write failure in write on #{cluster.servers.inspect}, attempt #{attempt}")
+            Mongo::Logger.logger.warn("[jontest] got batch write failure in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
           elsif write_unavailable
-            Mongo::Logger.logger.warn("[jontest] got write unavailable in write on #{cluster.servers.inspect}, attempt #{attempt}")
+            Mongo::Logger.logger.warn("[jontest] got write unavailable in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
           elsif no_server_available
-            Mongo::Logger.logger.warn("[jontest] got no server available in write on #{cluster.servers.inspect}, attempt #{attempt}")
+            Mongo::Logger.logger.warn("[jontest] got no server available in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
           elsif operation_failure
-            Mongo::Logger.logger.warn("[jontest] got operation failure in write on #{cluster.servers.inspect}, attempt #{attempt}")
+            Mongo::Logger.logger.warn("[jontest] got operation failure in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
           end
         end
 
