@@ -72,7 +72,8 @@ module Mongo
         'error reading response',
         'network error while attempting to run',
         "Can't use connection pool during shutdown",
-        "aggregate command didn't return results on host"
+        "aggregate command didn't return results on host",
+        "Callback canceled"
       ].map(&:downcase).freeze
 
       UNAUTHORIZED_MESSAGES = [
