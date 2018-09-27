@@ -184,7 +184,11 @@ module Mongo
           elsif no_server_available
             Mongo::Logger.logger.warn("[jontest] got no server available in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
           elsif operation_failure
-            Mongo::Logger.logger.warn("[jontest] got operation failure in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
+            if e.respond_to?(:write_retryable?) && e.write_retryable?
+              Mongo::Logger.logger.warn("[jontest] got operation failure in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
+            else
+              Mongo::Logger.logger.debug("[jontest] got operation failure in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
+            end
           end
         end
 
