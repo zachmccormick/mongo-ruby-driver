@@ -51,7 +51,17 @@ module Mongo
         cluster.scan!
         retry
       rescue Error::OperationFailure => e
-        if cluster.sharded? && e.retryable? && !(session && session.in_transaction?)
+        if cluster.sharded? && (e.retryable? || e.unauthorized?) && !(session && session.in_transaction?)
+
+          if e.unauthorized?
+            # Disconnect all servers to force a reauthentication on retry, but bump up the attempt count so we don't
+            # hammer the system retrying in the event something is wrong
+            cluster.servers.each(&:disconnect!)
+            if attempt < cluster.max_read_retries - 2
+              attempt = cluster.max_read_retries - 2
+            end
+          end
+
           max_read_retries = cluster.max_read_retries
           raise(e) if attempt > max_read_retries
           log_retry(e)
@@ -164,6 +174,8 @@ module Mongo
         connection_error = e.kind_of?(Error::SocketError) || e.kind_of?(Error::SocketTimeoutError)
         operation_failure = e.kind_of?(Error::OperationFailure)
         no_server_available = e.kind_of?(Error::NoServerAvailable)
+        auth_error = operation_failure && e.unauthorized?
+
         not_master = e.message.include?('not master'.freeze) || e.message.include?('could not contact primary'.freeze)
         batch_write = e.message.include?('no progress was made executing batch write op'.freeze) || e.kind_of?(Mongo::Error::BulkWriteError)
         write_unavailable = e.message.include?('write results unavailable'.freeze)
@@ -183,6 +195,14 @@ module Mongo
             Mongo::Logger.logger.warn("[jontest] got write unavailable in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
           elsif no_server_available
             Mongo::Logger.logger.warn("[jontest] got no server available in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
+          elsif auth_error
+            Mongo::Logger.logger.warn("[jontest] got auth error in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
+            # Disconnect all servers to force a reauthentication on retry, but bump up the attempt count so we don't
+            # hammer the system retrying in the event something is wrong
+            cluster.servers.each(&:disconnect!)
+            if attempt < cluster.max_read_retries - 2
+              attempt = cluster.max_read_retries - 2
+            end
           elsif operation_failure
             if e.respond_to?(:write_retryable?) && e.write_retryable?
               Mongo::Logger.logger.warn("[jontest] got operation failure in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")

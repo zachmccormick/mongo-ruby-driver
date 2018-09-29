@@ -147,12 +147,13 @@ describe Mongo::Retryable do
         context 'when the operation failure is not retryable' do
 
           let(:error) do
-            Mongo::Error::OperationFailure.new('not authorized')
+            Mongo::Error::OperationFailure.new('other error')
           end
 
           before do
             expect(operation).to receive(:execute).and_raise(error).ordered
             expect(cluster).to receive(:sharded?).and_return(true)
+            allow(cluster).to receive(:max_read_retries).and_return(10)
           end
 
           it 'raises the exception' do

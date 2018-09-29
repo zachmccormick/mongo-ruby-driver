@@ -96,6 +96,12 @@ module Mongo
         "Callback canceled"
       ].map(&:downcase).freeze
 
+      UNAUTHORIZED_MESSAGES = [
+        'unauthorized',
+        'not authorized',
+        'there are no users authenticated'
+      ].freeze
+
       def_delegators :@result, :operation_time
 
       # @return [ Integer ] code The error code parsed from the document.
@@ -116,6 +122,10 @@ module Mongo
       # @since 2.1.1
       def retryable?
         RETRY_MESSAGES.any?{ |m| message.downcase.include?(m) }
+      end
+
+      def unauthorized?
+        UNAUTHORIZED_MESSAGES.any?{ |m| message.downcase.include?(m) } && !message.downcase.include?("e11000 duplicate key".freeze)
       end
 
       # Can the write operation that caused the error be retried?
