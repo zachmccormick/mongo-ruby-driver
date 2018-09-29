@@ -54,7 +54,11 @@ module Mongo
         'write results unavailable',
         'could not find host matching read preference',
         'stepdown request while waiting for replication',
-        'demoted from primary while performing'
+        'demoted from primary while performing',
+        # InterruptedAtShutdown
+        '(11600)',
+        # "operation was interrupted"
+        '(11602)',
       ].map(&:downcase).freeze
 
       # These are magic error messages that could indicate a cluster
@@ -83,10 +87,6 @@ module Mongo
         'Shutdown in progress',
         'shutdown in progress',
         'could not find host matching read preference',
-        # InterruptedAtShutdown
-        '(11600)',
-        # "operation was interrupted"
-        '(11602)',
         # NotMasterOrSecondary
         '(13436)',
         'error reading response',
