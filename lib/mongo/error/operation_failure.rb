@@ -33,7 +33,7 @@ module Mongo
         'write results unavailable',
         'could not find host matching read preference',
         'stepdown request while waiting for replication',
-        'demoted from primary while performing update'
+        'demoted from primary while performing'
       ].map(&:downcase).freeze
 
       # These are magic error messages that could indicate a cluster
