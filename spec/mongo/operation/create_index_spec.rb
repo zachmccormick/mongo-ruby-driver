@@ -2,6 +2,11 @@ require 'spec_helper'
 
 describe Mongo::Operation::CreateIndex do
 
+  before do
+    authorized_collection.drop
+    authorized_collection.insert_one(test: 1)
+  end
+
   describe '#execute' do
 
     context 'when the index is created' do
@@ -11,15 +16,11 @@ describe Mongo::Operation::CreateIndex do
       end
 
       let(:operation) do
-        described_class.new(indexes: [ spec ], db_name: TEST_DB, coll_name: TEST_COLL)
+        described_class.new(indexes: [ spec ], db_name: SpecConfig.instance.test_db, coll_name: TEST_COLL)
       end
 
       let(:response) do
         operation.execute(authorized_primary)
-      end
-
-      after do
-        authorized_collection.indexes.drop_one('random_1')
       end
 
       it 'returns ok' do
@@ -34,19 +35,15 @@ describe Mongo::Operation::CreateIndex do
       end
 
       let(:operation) do
-        described_class.new(indexes: [ spec ], db_name: TEST_DB, coll_name: TEST_COLL)
+        described_class.new(indexes: [ spec ], db_name: SpecConfig.instance.test_db, coll_name: TEST_COLL)
       end
 
       let(:second_operation) do
-        described_class.new(indexes: [ spec.merge(unique: false) ], db_name: TEST_DB, coll_name: TEST_COLL)
+        described_class.new(indexes: [ spec.merge(unique: false) ], db_name: SpecConfig.instance.test_db, coll_name: TEST_COLL)
       end
 
       before do
         operation.execute(authorized_primary)
-      end
-
-      after do
-        authorized_collection.indexes.drop_one('random_1')
       end
 
       it 'raises an exception' do

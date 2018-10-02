@@ -1,9 +1,9 @@
 require 'spec_helper'
 
-describe Mongo::Cluster::AppMetadata do
+describe Mongo::Server::AppMetadata do
 
   let(:app_metadata) do
-    described_class.new(cluster)
+    described_class.new(cluster.options)
   end
 
   let(:cluster) do
@@ -127,6 +127,18 @@ describe Mongo::Cluster::AppMetadata do
 
           expect(app_metadata.ismaster_bytes.length).to eq(Mongo::Server::Monitor::Connection::ISMASTER_BYTES.length + sasl_supported_mechs_size + 26)
         end
+      end
+    end
+  end
+
+  describe '#document' do
+    context 'when user is given and auth_mech is not given' do
+      let(:app_metadata) do
+        described_class.new(user: 'foo')
+      end
+
+      it 'includes saslSupportedMechs' do
+        expect(app_metadata.send(:document)[:saslSupportedMechs]).to eq('admin.foo')
       end
     end
   end

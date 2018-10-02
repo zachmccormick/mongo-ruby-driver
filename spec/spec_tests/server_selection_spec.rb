@@ -24,19 +24,21 @@ describe 'Server Selection' do
 
       let(:cluster) do
         double('cluster').tap do |c|
+          allow(c).to receive(:summary)
           allow(c).to receive(:topology).and_return(topology)
           allow(c).to receive(:single?).and_return(topology.single?)
           allow(c).to receive(:sharded?).and_return(topology.sharded?)
           allow(c).to receive(:replica_set?).and_return(topology.replica_set?)
           allow(c).to receive(:unknown?).and_return(topology.unknown?)
           allow(c).to receive(:app_metadata).and_return(app_metadata)
+          allow(c).to receive(:options).and_return({})
         end
       end
 
       let(:candidate_servers) do
         spec.candidate_servers.collect do |server|
           address = Mongo::Address.new(server['address'])
-          Mongo::Server.new(address, cluster, monitoring, listeners, TEST_OPTIONS).tap do |s|
+          Mongo::Server.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options).tap do |s|
             allow(s).to receive(:average_round_trip_time).and_return(server['avg_rtt_ms'] / 1000.0)
             allow(s).to receive(:tags).and_return(server['tags'])
             allow(s).to receive(:secondary?).and_return(server['type'] == 'RSSecondary')
@@ -50,7 +52,7 @@ describe 'Server Selection' do
       let(:in_latency_window) do
         spec.in_latency_window.collect do |server|
           address = Mongo::Address.new(server['address'])
-          Mongo::Server.new(address, cluster, monitoring, listeners, TEST_OPTIONS).tap do |s|
+          Mongo::Server.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options).tap do |s|
             allow(s).to receive(:average_round_trip_time).and_return(server['avg_rtt_ms'] / 1000.0)
             allow(s).to receive(:tags).and_return(server['tags'])
             allow(s).to receive(:connectable?).and_return(true)

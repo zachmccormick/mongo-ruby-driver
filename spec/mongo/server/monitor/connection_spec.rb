@@ -10,10 +10,13 @@ describe Mongo::Server::Monitor::Connection do
     client.cluster.next_primary.address
   end
 
+  declare_topology_double
+
   let(:cluster) do
     double('cluster').tap do |cl|
-      allow(cl).to receive(:topology).and_return(double('topology'))
-      allow(cl).to receive(:app_metadata).and_return(Mongo::Cluster::AppMetadata.new(authorized_client.cluster))
+      allow(cl).to receive(:topology).and_return(topology)
+      allow(cl).to receive(:app_metadata).and_return(Mongo::Server::Monitor::AppMetadata.new(authorized_client.cluster.options))
+      allow(cl).to receive(:options).and_return({})
     end
   end
 
@@ -37,7 +40,7 @@ describe Mongo::Server::Monitor::Connection do
     context 'when a socket_timeout is in the options' do
 
       let(:options) do
-        TEST_OPTIONS.merge(connect_timeout: 3, socket_timeout: 5)
+        SpecConfig.instance.test_options.merge(connect_timeout: 3, socket_timeout: 5)
       end
 
       before do
@@ -56,7 +59,7 @@ describe Mongo::Server::Monitor::Connection do
     context 'when a socket_timeout is not in the options' do
 
       let(:options) do
-        TEST_OPTIONS.merge(connect_timeout: 3, socket_timeout: nil)
+        SpecConfig.instance.test_options.merge(connect_timeout: 3, socket_timeout: nil)
       end
 
       before do
@@ -78,7 +81,7 @@ describe Mongo::Server::Monitor::Connection do
     context 'when a socket_timeout is in the options' do
 
       let(:options) do
-        TEST_OPTIONS.merge(connect_timeout: nil, socket_timeout: 5)
+        SpecConfig.instance.test_options.merge(connect_timeout: nil, socket_timeout: 5)
       end
 
       before do
@@ -97,7 +100,7 @@ describe Mongo::Server::Monitor::Connection do
     context 'when a socket_timeout is not in the options' do
 
       let(:options) do
-        TEST_OPTIONS.merge(connect_timeout: nil, socket_timeout: nil)
+        SpecConfig.instance.test_options.merge(connect_timeout: nil, socket_timeout: nil)
       end
 
       before do

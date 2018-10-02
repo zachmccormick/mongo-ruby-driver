@@ -2,8 +2,8 @@ require 'spec_helper'
 
 describe Mongo::Collection do
 
-  after do
-    authorized_collection.delete_many
+  before do
+    authorized_collection.drop
   end
 
   let(:collection_invalid_write_concern) do
@@ -101,7 +101,7 @@ describe Mongo::Collection do
   describe '#with' do
 
     let(:client) do
-      Mongo::Client.new(SpecConfig.instance.addresses, TEST_OPTIONS)
+      new_local_client(SpecConfig.instance.addresses, SpecConfig.instance.test_options)
     end
 
     let(:database) do
@@ -133,7 +133,7 @@ describe Mongo::Collection do
       context 'when the client has a server selection timeout setting' do
 
         let(:client) do
-          Mongo::Client.new(SpecConfig.instance.addresses, TEST_OPTIONS.merge(server_selection_timeout: 2))
+          new_local_client(SpecConfig.instance.addresses, SpecConfig.instance.test_options.merge(server_selection_timeout: 2))
         end
 
         it 'passes the the server_selection_timeout to the cluster' do
@@ -144,7 +144,7 @@ describe Mongo::Collection do
       context 'when the client has a read preference set' do
 
         let(:client) do
-          Mongo::Client.new(SpecConfig.instance.addresses, TEST_OPTIONS.merge(read: { mode: :primary_preferred }))
+          new_local_client(SpecConfig.instance.addresses, SpecConfig.instance.test_options.merge(read: { mode: :primary_preferred }))
         end
 
         it 'sets the new read options on the new collection' do
@@ -156,7 +156,7 @@ describe Mongo::Collection do
       context 'when the client has a read preference and server selection timeout set' do
 
         let(:client) do
-          Mongo::Client.new(SpecConfig.instance.addresses, TEST_OPTIONS.merge(read: { mode: :primary_preferred }, server_selection_timeout: 2))
+          new_local_client(SpecConfig.instance.addresses, SpecConfig.instance.test_options.merge(read: { mode: :primary_preferred }, server_selection_timeout: 2))
         end
 
         it 'sets the new read options on the new collection' do
@@ -186,7 +186,7 @@ describe Mongo::Collection do
       context 'when the client has a write concern set' do
 
         let(:client) do
-          Mongo::Client.new(SpecConfig.instance.addresses, TEST_OPTIONS.merge(write: INVALID_WRITE_CONCERN))
+          new_local_client(SpecConfig.instance.addresses, SpecConfig.instance.test_options.merge(write: INVALID_WRITE_CONCERN))
         end
 
         it 'sets the new write options on the new collection' do
@@ -219,7 +219,7 @@ describe Mongo::Collection do
       context 'when the client has a server selection timeout setting' do
 
         let(:client) do
-          Mongo::Client.new(SpecConfig.instance.addresses, TEST_OPTIONS.merge(server_selection_timeout: 2))
+          new_local_client(SpecConfig.instance.addresses, SpecConfig.instance.test_options.merge(server_selection_timeout: 2))
         end
 
         it 'passes the server_selection_timeout setting to the cluster' do
@@ -230,7 +230,7 @@ describe Mongo::Collection do
       context 'when the client has a read preference set' do
 
         let(:client) do
-          Mongo::Client.new(SpecConfig.instance.addresses, TEST_OPTIONS.merge(read: { mode: :primary_preferred }))
+          new_local_client(SpecConfig.instance.addresses, SpecConfig.instance.test_options.merge(read: { mode: :primary_preferred }))
         end
 
         it 'sets the new read options on the new collection' do
@@ -357,11 +357,8 @@ describe Mongo::Collection do
       end
 
       before do
+        authorized_client[:specs].drop
         collection.create
-      end
-
-      after do
-        collection.drop
       end
 
       it 'returns true' do
@@ -376,11 +373,8 @@ describe Mongo::Collection do
       end
 
       before do
+        authorized_client[:specs].drop
         collection.create
-      end
-
-      after do
-        collection.drop
       end
 
       it 'returns false' do
@@ -390,6 +384,9 @@ describe Mongo::Collection do
   end
 
   describe '#create' do
+    before do
+      authorized_client[:specs].drop
+    end
 
     let(:database) do
       authorized_client.database
@@ -403,10 +400,6 @@ describe Mongo::Collection do
 
       let!(:response) do
         collection.create
-      end
-
-      after do
-        collection.drop
       end
 
       it 'executes the command' do
@@ -430,10 +423,6 @@ describe Mongo::Collection do
 
           let(:options) do
             { :capped => true, :size => 1024 }
-          end
-
-          after do
-            collection.drop
           end
 
           it 'executes the command' do
@@ -462,10 +451,6 @@ describe Mongo::Collection do
 
           let(:collection_info) do
             database.list_collections.find { |i| i['name'] == 'specs' }
-          end
-
-          after do
-            collection.drop
           end
 
           it 'executes the command' do
@@ -512,7 +497,7 @@ describe Mongo::Collection do
 
       context 'when the collection has a write concern' do
 
-        after do
+        before do
           database[:specs].drop
         end
 
@@ -559,7 +544,7 @@ describe Mongo::Collection do
             database.list_collections.find { |i| i['name'] == 'specs' }
           end
 
-          after do
+          before do
             collection.drop
           end
 
@@ -644,7 +629,7 @@ describe Mongo::Collection do
           authorized_client[:specs, invalid: true].create(session: session)
         end
 
-        after do
+        before do
           collection.drop
         end
 
@@ -667,7 +652,10 @@ describe Mongo::Collection do
     context 'when the collection exists' do
 
       before do
+        authorized_client[:specs].drop
         collection.create
+        # wait for the collection to be created
+        sleep 0.4
       end
 
       context 'when a session is provided' do
@@ -686,10 +674,6 @@ describe Mongo::Collection do
 
         let(:client) do
           authorized_client
-        end
-
-        after do
-          collection.drop
         end
 
         it_behaves_like 'an operation using a session'
@@ -734,10 +718,6 @@ describe Mongo::Collection do
           collection.with(write_options)
         end
 
-        after do
-          collection.drop
-        end
-
         context 'when the server supports write concern on the drop command', if: collation_enabled? && can_set_write_concern? do
 
           it 'applies the write concern' do
@@ -757,6 +737,12 @@ describe Mongo::Collection do
     end
 
     context 'when the collection does not exist', if: can_set_write_concern? do
+      before do
+        begin
+          collection.drop
+        rescue Mongo::Error::OperationFailure
+        end
+      end
 
       it 'returns false' do
         expect(collection.drop).to be(false)
@@ -1173,11 +1159,13 @@ describe Mongo::Collection do
       end
 
       let(:custom_collection) do
-        custom_client[TEST_COLL]
+        custom_client['custom_id_generator_test_collection']
       end
 
       before do
+        custom_collection.delete_many
         custom_collection.insert_many([{ name: 'testing' }])
+        expect(custom_collection.count).to eq(1)
       end
 
       after do
@@ -1185,6 +1173,7 @@ describe Mongo::Collection do
       end
 
       it 'inserts with the custom id' do
+        expect(custom_collection.count).to eq(1)
         expect(custom_collection.find.first[:_id]).to eq(1)
       end
     end
@@ -1247,6 +1236,7 @@ describe Mongo::Collection do
       min_server_version '3.2'
 
       around(:each) do |spec|
+        authorized_client[:validating].drop
         authorized_client[:validating,
                           :validator => { :a => { '$exists' => true } }].tap do |c|
           c.create
@@ -1437,6 +1427,7 @@ describe Mongo::Collection do
       end
 
       before do
+        custom_collection.delete_many
         custom_collection.insert_one({ name: 'testing' })
       end
 
@@ -1527,10 +1518,6 @@ describe Mongo::Collection do
 
     before do
       authorized_collection.indexes.create_one(index_spec, unique: true)
-    end
-
-    after do
-      authorized_collection.indexes.drop_one('name_1')
     end
 
     it 'returns a list of indexes' do
@@ -4064,6 +4051,7 @@ describe Mongo::Collection do
       min_server_version '3.2'
 
       around(:each) do |spec|
+        authorized_client[:validating].drop
         authorized_client[:validating,
                           :validator => { :a => { '$exists' => true } }].tap do |c|
           c.create
@@ -4452,6 +4440,7 @@ describe Mongo::Collection do
       min_server_version '3.2'
 
       around(:each) do |spec|
+        authorized_client[:validating].drop
         authorized_client[:validating,
                           :validator => { :a => { '$exists' => true } }].tap do |c|
           c.create

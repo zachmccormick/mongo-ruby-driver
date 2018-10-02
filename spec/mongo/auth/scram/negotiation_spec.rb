@@ -1,33 +1,12 @@
 require 'spec_helper'
 require 'cgi'
 
-# In order to properly test that a user that can be authenticated with either SCRAM-SHA-1 or
-# SCRAM-SHA-256 uses SCRAM-SHA-256 by default, we need to monkey patch the authenticate method to
-# save the authentication method chosen.
-#
-# Note that this will cease to be effective if the tests are parallelized, so another strategy for
-# testing the above condition will need to be implemented.
-module Mongo
-  class Server
-    class Connection
-      @last_mechanism_used = nil
-
-      class << self
-        attr_accessor :last_mechanism_used
-      end
-
-      alias old_authenticate! authenticate!
-
-      def authenticate!
-        Connection.last_mechanism_used = options[:auth_mech] || default_mechanism
-        old_authenticate!
-      end
-    end
-  end
-end
-
 describe 'SCRAM-SHA auth mechanism negotiation' do
   require_scram_sha_256_support
+
+  before(:all) do
+    ClientRegistry.instance.close_all_clients
+  end
 
   URI_OPTION_MAP = {
     :auth_source => 'authsource',
@@ -35,15 +14,19 @@ describe 'SCRAM-SHA auth mechanism negotiation' do
   }
 
   let(:create_user!) do
-    ADMIN_AUTHORIZED_TEST_CLIENT.with(
-      database: 'admin',
-      app_name: 'this is used solely to force the new client to create its own cluster',
-    ).database.command(
-      createUser: user.name,
-      pwd: user.password,
-      roles: ['root'],
-      mechanisms: auth_mechanisms
-    ) rescue Mongo::Error::OperationFailure
+    ClientRegistry.instance.global_client('root_authorized_admin').tap do |client|
+      users = client.database.users
+      if users.info(user.name).any?
+        users.remove(user.name)
+      end
+      client.database.command(
+        createUser: user.name,
+        pwd: password,
+        roles: ['root'],
+        mechanisms: auth_mechanisms
+      )
+      client.close
+    end
   end
 
   let(:password) do
@@ -65,9 +48,9 @@ describe 'SCRAM-SHA auth mechanism negotiation' do
         o[:auth_mech] = auth_mech if auth_mech
       end
 
-      Mongo::Client.new(
+      new_local_client(
         SpecConfig.instance.addresses,
-        TEST_OPTIONS.merge(opts)
+        SpecConfig.instance.test_options.merge(opts)
       )
     end
 
@@ -217,7 +200,18 @@ describe 'SCRAM-SHA auth mechanism negotiation' do
           it 'authenticates successfully' do
             create_user!
 
+            mechanism = nil
+            # Negotiation currently happens on monitoring sockets,
+            # hence may be invoked more than once here
+            expect(Mongo::Auth).to receive(:get).at_least(:once).and_wrap_original do |m, *args|
+              # copy mechanism here rather than whole user
+              # in case something mutates mechanism later
+              mechanism = args.first.mechanism
+              m.call(*args)
+            end
+
             expect { result }.not_to raise_error
+            expect(mechanism).to eq(:scram)
           end
         end
 
@@ -230,9 +224,20 @@ describe 'SCRAM-SHA auth mechanism negotiation' do
           it 'authenticates successfully with SCRAM-SHA-256' do
             create_user!
 
-            Mongo::Server::Connection.last_mechanism_used = nil
+            mechanism = nil
+            # Negotiation currently happens on monitoring sockets,
+            # hence may be invoked more than once here
+            expect(Mongo::Auth).to receive(:get).at_least(:once).and_wrap_original do |m, *args|
+              if args.first.name == 'both'
+                # copy mechanism here rather than whole user
+                # in case something mutates mechanism later
+                mechanism = args.first.mechanism
+                m.call(*args)
+              end
+            end
+
             expect { result }.not_to raise_error
-            expect(Mongo::Server::Connection.last_mechanism_used).to eq(:scram256)
+            expect(mechanism).to eq(:scram256)
           end
         end
       end
@@ -334,7 +339,7 @@ describe 'SCRAM-SHA auth mechanism negotiation' do
     end
 
     let(:client) do
-      Mongo::Client.new(uri, SSL_OPTIONS)
+      new_local_client(uri, SpecConfig.instance.ssl_options)
     end
 
     context 'when the user exists' do
@@ -482,7 +487,18 @@ describe 'SCRAM-SHA auth mechanism negotiation' do
           it 'authenticates successfully' do
             create_user!
 
+            mechanism = nil
+            # Negotiation currently happens on monitoring sockets,
+            # hence may be invoked more than once here
+            expect(Mongo::Auth).to receive(:get).at_least(:once).and_wrap_original do |m, *args|
+              # copy mechanism here rather than whole user
+              # in case something mutates mechanism later
+              mechanism = args.first.mechanism
+              m.call(*args)
+            end
+
             expect { result }.not_to raise_error
+            expect(mechanism).to eq(:scram)
           end
         end
 
@@ -495,79 +511,21 @@ describe 'SCRAM-SHA auth mechanism negotiation' do
           it 'authenticates successfully with SCRAM-SHA-256' do
             create_user!
 
-            Mongo::Server::Connection.last_mechanism_used = nil
+            mechanism = nil
+            # Negotiation currently happens on monitoring sockets,
+            # hence may be invoked more than once here
+            expect(Mongo::Auth).to receive(:get).at_least(:once).and_wrap_original do |m, *args|
+              if args.first.name == 'both'
+                # copy mechanism here rather than whole user
+                # in case something mutates mechanism later
+                mechanism = args.first.mechanism
+                m.call(*args)
+              end
+            end
+
             expect { result }.not_to raise_error
-            expect(Mongo::Server::Connection.last_mechanism_used).to eq(:scram256)
+            expect(mechanism).to eq(:scram256)
           end
-        end
-      end
-    end
-
-    context 'when the user does not exist' do
-
-      let(:auth_mech) do
-        nil
-      end
-
-      let(:user) do
-        Mongo::Auth::User.new(
-          user: 'nonexistent',
-          password: 'nonexistent',
-        )
-      end
-
-      it 'fails with a Mongo::Auth::Unauthorized error' do
-        expect { result }.to raise_error(Mongo::Auth::Unauthorized)
-      end
-    end
-
-    context 'when the username and password provided require saslprep' do
-
-      let(:auth_mech) do
-        nil
-      end
-
-      let(:auth_mechanisms) do
-        ['SCRAM-SHA-256']
-      end
-
-      context 'when the username and password as ASCII' do
-
-        let(:user) do
-          Mongo::Auth::User.new(
-            user: 'IX',
-            password: 'IX'
-          )
-        end
-
-        let(:password) do
-          "I\u00ADX"
-        end
-
-        it 'authenticates successfully after saslprepping password' do
-          create_user!
-
-          expect { result }.not_to raise_error
-        end
-      end
-
-      context 'when the username and password are non-ASCII' do
-
-        let(:user) do
-          Mongo::Auth::User.new(
-            user: "\u2168",
-            password: "\u2163"
-          )
-        end
-
-        let(:password) do
-          "I\u00ADV"
-        end
-
-        it 'authenticates successfully after saslprepping password' do
-          create_user!
-
-          expect { result }.not_to raise_error
         end
       end
     end

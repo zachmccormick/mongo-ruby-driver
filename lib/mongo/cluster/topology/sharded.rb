@@ -42,7 +42,12 @@ module Mongo
         #
         # @since 2.0.0
         def display_name
-          NAME
+          self.class.name.gsub(/.*::/, '')
+        end
+
+        # @api experimental
+        def summary
+          display_name.gsub(' ', '')
         end
 
         # Elect a primary server within this topology.

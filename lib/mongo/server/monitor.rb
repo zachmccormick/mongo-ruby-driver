@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require 'mongo/server/monitor/connection'
-
 module Mongo
   class Server
 
@@ -41,7 +39,38 @@ module Mongo
       # @since 2.0.0
       RTT_WEIGHT_FACTOR = 0.2.freeze
 
-      # @return [ Mongo::Connection ] connection The connection to use.
+      # Create the new server monitor.
+      #
+      # @example Create the server monitor.
+      #   Mongo::Server::Monitor.new(address, listeners, monitoring)
+      #
+      # @note Monitor must never be directly instantiated outside of a Server.
+      #
+      # @param [ Address ] address The address to monitor.
+      # @param [ Event::Listeners ] listeners The event listeners.
+      # @param [ Monitoring ] monitoring The monitoring..
+      # @param [ Hash ] options The options.
+      # @option options [ Float ] :heartbeat_frequency The interval, in seconds,
+      #   between server description refreshes via ismaster.
+      #
+      # @since 2.0.0
+      # @api private
+      def initialize(address, listeners, monitoring, options = {})
+        unless monitoring.is_a?(Monitoring)
+          raise ArgumentError, "Wrong monitoring type: #{monitoring.inspect}"
+        end
+        @description = Description.new(address, {})
+        @inspector = Description::Inspector.new(listeners)
+        @monitoring = monitoring
+        @options = options.freeze
+        # This is a Mongo::Server::Monitor::Connection
+        @connection = Connection.new(address, options)
+        @average_round_trip_time = nil
+        @last_scan = nil
+        @mutex = Mutex.new
+      end
+
+      # @return [ Mongo::Server::Monitor::Connection ] connection The connection to use.
       attr_reader :connection
 
       # @return [ Server::Description ] description The server
@@ -63,31 +92,11 @@ module Mongo
       # of the connection.
       def_delegators :connection, :compressor
 
-      # Perform a check of the server with throttling, and update
-      # the server's description.
-      #
-      # If the server was checked less than MIN_SCAN_FREQUENCY seconds
-      # ago, sleep until MIN_SCAN_FREQUENCY seconds have passed since the last
-      # check. Then perform the check which involves running isMaster
-      # on the server being monitored and updating the server description
-      # as a result.
-      #
-      # @note If the system clock is set to a time in the past, this method
-      #   can sleep for a very long time.
-      #
-      # @example Run a scan.
-      #   monitor.scan!
-      #
-      # @return [ Description ] The updated description.
-      #
-      # @since 2.0.0
-      def scan!
-        throttle_scan_frequency!
-        @description = inspector.run(description, *ismaster)
-      end
+      # @return [ Monitoring ] monitoring The monitoring.
+      attr_reader :monitoring
 
-      # Get the refresh interval for the server. This will be defined via an option
-      # or will default to 5.
+      # Get the refresh interval for the server. This will be defined via an
+      # option or will default to 10.
       #
       # @example Get the refresh interval.
       #   server.heartbeat_frequency
@@ -97,30 +106,6 @@ module Mongo
       # @since 2.0.0
       def heartbeat_frequency
         @heartbeat_frequency ||= options[:heartbeat_frequency] || HEARTBEAT_FREQUENCY
-      end
-
-      # Create the new server monitor.
-      #
-      # @api private
-      #
-      # @example Create the server monitor.
-      #   Mongo::Server::Monitor.new(address, listeners)
-      #
-      # @note Monitor must never be directly instantiated outside of a Server.
-      #
-      # @param [ Address ] address The address to monitor.
-      # @param [ Event::Listeners ] listeners The event listeners.
-      # @param [ Hash ] options The options.
-      #
-      # @since 2.0.0
-      def initialize(address, listeners, options = {})
-        @description = Description.new(address, {})
-        @inspector = Description::Inspector.new(listeners)
-        @options = options.freeze
-        @connection = Connection.new(address, options)
-        @last_round_trip_time = nil
-        @last_scan = nil
-        @mutex = Mutex.new
       end
 
       # Runs the server monitor. Refreshing happens on a separate thread per
@@ -141,17 +126,51 @@ module Mongo
         end
       end
 
+      # Perform a check of the server with throttling, and update
+      # the server's description and average round trip time.
+      #
+      # If the server was checked less than MIN_SCAN_FREQUENCY seconds
+      # ago, sleep until MIN_SCAN_FREQUENCY seconds have passed since the last
+      # check. Then perform the check which involves running isMaster
+      # on the server being monitored and updating the server description
+      # as a result.
+      #
+      # @note If the system clock is set to a time in the past, this method
+      #   can sleep for a very long time.
+      #
+      # @example Run a scan.
+      #   monitor.scan!
+      #
+      # @return [ Description ] The updated description.
+      #
+      # @since 2.0.0
+      def scan!
+        throttle_scan_frequency!
+        # ismaster call updates @average_round_trip_time
+        result = ismaster
+        @description = inspector.run(description, result, @average_round_trip_time)
+        @description
+      end
+
       # Stops the server monitor. Kills the thread so it doesn't continue
       # taking memory and sending commands to the connection.
       #
       # @example Stop the monitor.
       #   monitor.stop!
       #
-      # @return [ Boolean ] Is the Thread stopped?
+      # @return [ Boolean ] Is the thread stopped?
       #
       # @since 2.0.0
       def stop!
-        connection.disconnect! && @thread.kill && @thread.stop?
+        # Although disconnect! documentation implies a possibility of
+        # failure, all of our disconnects always return true
+        if connection.disconnect!
+          if @thread
+            @thread.kill && @thread.stop?
+          else
+            true
+          end
+        end
       end
 
       # Restarts the server monitor unless the current thread is alive.
@@ -168,24 +187,46 @@ module Mongo
 
       private
 
-      def average_round_trip_time(start)
-        new_rtt = Time.now - start
-        RTT_WEIGHT_FACTOR * new_rtt + (1 - RTT_WEIGHT_FACTOR) * (@last_round_trip_time || new_rtt)
+      def round_trip_time(start)
+        Time.now - start
       end
 
-      def calculate_average_round_trip_time(start)
-        @last_round_trip_time = average_round_trip_time(start)
+      def round_trip_times(start)
+        new_rtt = round_trip_time(start)
+        average_rtt = if @average_round_trip_time
+          RTT_WEIGHT_FACTOR * new_rtt + (1 - RTT_WEIGHT_FACTOR) * @average_round_trip_time
+        else
+          new_rtt
+        end
+        [new_rtt, average_rtt]
       end
 
       def ismaster
         @mutex.synchronize do
           start = Time.now
+          monitoring.started(
+            Monitoring::SERVER_HEARTBEAT,
+            Monitoring::Event::ServerHeartbeatStarted.new(connection.address)
+          )
+
           begin
-            return connection.ismaster, calculate_average_round_trip_time(start)
+            result = connection.ismaster
           rescue Exception => e
-            log_debug(e.message)
-            return {}, calculate_average_round_trip_time(start)
+            rtt, @average_round_trip_time = round_trip_times(start)
+            log_debug("Error running ismaster on #{connection.address}: #{e.message}")
+            monitoring.failed(
+              Monitoring::SERVER_HEARTBEAT,
+              Monitoring::Event::ServerHeartbeatFailed.new(connection.address, rtt, e)
+            )
+            result = {}
+          else
+            rtt, @average_round_trip_time = round_trip_times(start)
+            monitoring.succeeded(
+              Monitoring::SERVER_HEARTBEAT,
+              Monitoring::Event::ServerHeartbeatSucceeded.new(connection.address, rtt)
+            )
           end
+          result
         end
       end
 
@@ -202,3 +243,6 @@ module Mongo
     end
   end
 end
+
+require 'mongo/server/monitor/connection'
+require 'mongo/server/monitor/app_metadata'

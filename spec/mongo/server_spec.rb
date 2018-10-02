@@ -2,14 +2,13 @@ require 'spec_helper'
 
 describe Mongo::Server do
 
-  let(:topology) do
-    double('topology')
-  end
+  declare_topology_double
 
   let(:cluster) do
     double('cluster').tap do |cl|
       allow(cl).to receive(:topology).and_return(topology)
       allow(cl).to receive(:app_metadata).and_return(app_metadata)
+      allow(cl).to receive(:options).and_return({})
     end
   end
 
@@ -32,7 +31,7 @@ describe Mongo::Server do
   describe '#==' do
 
     let(:server) do
-      described_class.new(address, cluster, monitoring, listeners, TEST_OPTIONS)
+      described_class.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options)
     end
 
     after do
@@ -56,7 +55,7 @@ describe Mongo::Server do
       context 'when the addresses match' do
 
         let(:other) do
-          described_class.new(address, cluster, monitoring, listeners, TEST_OPTIONS)
+          described_class.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options)
         end
 
         it 'returns true' do
@@ -71,7 +70,7 @@ describe Mongo::Server do
         end
 
         let(:other) do
-          described_class.new(other_address, cluster, monitoring, listeners, TEST_OPTIONS)
+          described_class.new(other_address, cluster, monitoring, listeners, SpecConfig.instance.test_options)
         end
 
         it 'returns false' do
@@ -84,7 +83,7 @@ describe Mongo::Server do
   describe '#disconnect!' do
 
     let(:server) do
-      described_class.new(address, cluster, monitoring, listeners, TEST_OPTIONS)
+      described_class.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options)
     end
 
     it 'stops the monitor instance' do
@@ -102,7 +101,7 @@ describe Mongo::Server do
         cluster,
         monitoring,
         listeners,
-        TEST_OPTIONS.merge(:heartbeat_frequency => 5)
+        SpecConfig.instance.test_options.merge(:heartbeat_frequency => 5)
       )
     end
 
@@ -120,14 +119,18 @@ describe Mongo::Server do
     end
 
     it 'sets the options' do
-      expect(server.options).to eq(TEST_OPTIONS.merge(:heartbeat_frequency => 5))
+      expect(server.options).to eq(SpecConfig.instance.test_options.merge(:heartbeat_frequency => 5))
+    end
+
+    it 'creates monitor with monitoring app metadata' do
+      expect(server.monitor.options[:app_metadata]).to be_a(Mongo::Server::Monitor::AppMetadata)
     end
   end
 
   describe '#scan!' do
 
     let(:server) do
-      described_class.new(address, cluster, monitoring, listeners, TEST_OPTIONS)
+      described_class.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options)
     end
 
     after do
@@ -143,7 +146,7 @@ describe Mongo::Server do
   describe '#reconnect!' do
 
     let(:server) do
-      described_class.new(address, cluster, monitoring, listeners, TEST_OPTIONS)
+      described_class.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options)
     end
 
     before do
@@ -163,7 +166,7 @@ describe Mongo::Server do
   describe 'retry_writes?' do
 
     let(:server) do
-      described_class.new(address, cluster, monitoring, listeners, TEST_OPTIONS)
+      described_class.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options)
     end
 
     before do

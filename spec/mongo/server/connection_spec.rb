@@ -1,6 +1,7 @@
 require 'spec_helper'
 
 describe Mongo::Server::Connection do
+  class ConnectionSpecTestException < Exception; end
 
   let(:address) do
     default_address
@@ -15,24 +16,26 @@ describe Mongo::Server::Connection do
   end
 
   let(:app_metadata) do
-    Mongo::Cluster::AppMetadata.new(authorized_client.cluster)
+    Mongo::Server::AppMetadata.new(authorized_client.cluster.options)
   end
 
   let(:cluster) do
     double('cluster').tap do |cl|
       allow(cl).to receive(:topology).and_return(topology)
       allow(cl).to receive(:app_metadata).and_return(app_metadata)
+      allow(cl).to receive(:options).and_return({})
       allow(cl).to receive(:cluster_time).and_return(nil)
       allow(cl).to receive(:update_cluster_time)
+      pool = double('pool')
+      allow(pool).to receive(:disconnect!)
+      allow(cl).to receive(:pool).and_return(pool)
     end
   end
 
-  let(:topology) do
-    double('topology')
-  end
+  declare_topology_double
 
   let(:server) do
-    Mongo::Server.new(address, cluster, monitoring, listeners, TEST_OPTIONS)
+    Mongo::Server.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options)
   end
 
   let(:pool) do
@@ -53,7 +56,7 @@ describe Mongo::Server::Connection do
         described_class.new(server, server.options)
       end
 
-      let!(:result) do
+      let(:result) do
         connection.connect!
       end
 
@@ -66,11 +69,95 @@ describe Mongo::Server::Connection do
       end
 
       it 'creates a socket' do
+        result
         expect(socket).to_not be_nil
       end
 
       it 'connects the socket' do
+        result
         expect(socket).to be_alive
+      end
+
+      shared_examples_for 'failing connection' do
+        it 'raises an exception' do
+          expect(result).to be_a(Exception)
+        end
+
+        it 'clears socket' do
+          result
+          expect(connection.send(:socket)).to be nil
+        end
+
+        it 'attempts to reconnect after failure when asked' do
+          # for some reason referencing result here instead of
+          # copy pasting it like this doesn't work
+          expect(connection).to receive(:authenticate!).and_raise(exception)
+          expect do
+            connection.connect!
+          end.to raise_error(exception)
+
+          expect(connection).to receive(:authenticate!).and_raise(ConnectionSpecTestException)
+          expect do
+            connection.connect!
+          end.to raise_error(ConnectionSpecTestException)
+        end
+      end
+
+      context 'when #handshake! raises an exception' do
+        let(:exception) do
+          Mongo::Error::SocketError.new
+        end
+
+        let(:result) do
+          expect(connection).to receive(:handshake!).and_raise(exception)
+          begin
+            connection.connect!
+          rescue Exception => e
+            e
+          else
+            nil
+          end
+        end
+
+        it_behaves_like 'failing connection'
+      end
+
+      context 'when #authenticate! raises an exception' do
+        let(:exception) do
+          Mongo::Error::OperationFailure.new
+        end
+
+        let(:result) do
+          expect(connection).to receive(:authenticate!).and_raise(exception)
+          begin
+            connection.connect!
+          rescue Exception => e
+            e
+          else
+            nil
+          end
+        end
+
+        it_behaves_like 'failing connection'
+      end
+
+      context 'when a non-Mongo exception is raised' do
+        let(:exception) do
+          SystemExit.new
+        end
+
+        let(:result) do
+          expect(connection).to receive(:authenticate!).and_raise(exception)
+          begin
+            connection.connect!
+          rescue Exception => e
+            e
+          else
+            nil
+          end
+        end
+
+        it_behaves_like 'failing connection'
       end
     end
 
@@ -80,17 +167,22 @@ describe Mongo::Server::Connection do
         described_class.new(server, server.options)
       end
 
-      before do
-        connection.connect!
-        connection.connect!
-      end
-
       let(:socket) do
         connection.send(:socket)
       end
 
       it 'keeps the socket alive' do
+        expect(connection.connect!).to be true
+        expect(connection.connect!).to be true
         expect(socket).to be_alive
+      end
+
+      it 'retains socket object' do
+        expect(connection.connect!).to be true
+        socket_id = connection.send(:socket).object_id
+        expect(connection.connect!).to be true
+        new_socket_id = connection.send(:socket).object_id
+        expect(new_socket_id).to eq(socket_id)
       end
     end
 
@@ -101,28 +193,58 @@ describe Mongo::Server::Connection do
         let(:connection) do
           described_class.new(
             server,
-            TEST_OPTIONS.merge(
+            SpecConfig.instance.test_options.merge(
               :user => 'notauser',
               :password => 'password',
-              :database => TEST_DB,
+              :database => SpecConfig.instance.test_db,
               :heartbeat_frequency => 30)
           )
         end
 
-        let!(:error) do
+        let(:error) do
           e = begin; connection.send(:ensure_connected); rescue => ex; ex; end
         end
 
-        it 'raises an error' do
-          expect(error).to be_a(Mongo::Auth::Unauthorized)
+        context 'not checking pool disconnection' do
+          before do
+            allow(cluster).to receive(:pool).with(server).and_return(pool)
+            allow(pool).to receive(:disconnect!).and_return(true)
+          end
+
+          it 'raises an error' do
+            expect(error).to be_a(Mongo::Auth::Unauthorized)
+          end
+
+          it 'disconnects the socket' do
+            error
+            expect(connection.send(:socket)).to be(nil)
+          end
+
+          it "keeps server's type" do
+            old_type = server.description.server_type
+            expect(old_type).not_to eq(:unknown)
+            old_oid = server.description.object_id
+            error
+            expect(server.description.server_type).to eq(old_type)
+            expect(server.description.object_id).to eq(old_oid)
+          end
+
+          it "keeps topology" do
+            old_topology = server.cluster.topology
+            expect(old_topology).not_to be(Mongo::Cluster::Topology::Unknown)
+            error
+            expect(server.cluster.topology).to eql(old_topology)
+          end
         end
 
-        it 'disconnects the socket' do
-          expect(connection.send(:socket)).to be(nil)
-        end
-
-        it 'marks the server as unknown' do
-          expect(server).to be_unknown
+        # need a separate context here, otherwise disconnect expectation
+        # is ignored due to allowing disconnects in the other context
+        context 'checking pool disconnection' do
+          it 'disconnects non-monitoring sockets' do
+            expect(cluster).to receive(:pool).with(server).and_return(pool)
+            expect(pool).to receive(:disconnect!).and_return(true)
+            error
+          end
         end
       end
 
@@ -131,10 +253,10 @@ describe Mongo::Server::Connection do
         let(:connection) do
           described_class.new(
             server,
-            TEST_OPTIONS.merge(
-              :user => TEST_USER.name,
-              :password => TEST_USER.password,
-              :database => TEST_USER.database )
+            SpecConfig.instance.test_options.merge(
+              :user => SpecConfig.instance.test_user.name,
+              :password => SpecConfig.instance.test_user.password,
+              :database => SpecConfig.instance.test_user.database )
           )
         end
 
@@ -147,6 +269,7 @@ describe Mongo::Server::Connection do
         end
       end
     end
+
   end
 
   describe '#disconnect!' do
@@ -184,10 +307,10 @@ describe Mongo::Server::Connection do
     let!(:connection) do
       described_class.new(
         server,
-        TEST_OPTIONS.merge(
-          :user => TEST_USER.name,
-          :password => TEST_USER.password,
-          :database => TEST_USER.database )
+        SpecConfig.instance.test_options.merge(
+          :user => SpecConfig.instance.test_user.name,
+          :password => SpecConfig.instance.test_user.password,
+          :database => SpecConfig.instance.test_user.database )
       )
     end
 
@@ -196,11 +319,11 @@ describe Mongo::Server::Connection do
     end
 
     let(:insert) do
-      Mongo::Protocol::Insert.new(TEST_DB, TEST_COLL, documents)
+      Mongo::Protocol::Insert.new(SpecConfig.instance.test_db, TEST_COLL, documents)
     end
 
     let(:query) do
-      Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { 'name' => 'testing' })
+      Mongo::Protocol::Query.new(SpecConfig.instance.test_db, TEST_COLL, { 'name' => 'testing' })
     end
 
     context 'when providing a single message' do
@@ -225,7 +348,7 @@ describe Mongo::Server::Connection do
       end
 
       let(:command) do
-        Mongo::Protocol::Query.new(TEST_DB, '$cmd', selector, :limit => -1)
+        Mongo::Protocol::Query.new(SpecConfig.instance.test_db, '$cmd', selector, :limit => -1)
       end
 
       let(:reply) do
@@ -248,15 +371,15 @@ describe Mongo::Server::Connection do
       end
 
       let(:insert) do
-        Mongo::Protocol::Insert.new(TEST_DB, TEST_COLL, documents)
+        Mongo::Protocol::Insert.new(SpecConfig.instance.test_db, TEST_COLL, documents)
       end
 
       let(:query_bob) do
-        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { name: 'bob' })
+        Mongo::Protocol::Query.new(SpecConfig.instance.test_db, TEST_COLL, { name: 'bob' })
       end
 
       let(:query_alice) do
-        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { name: 'alice' })
+        Mongo::Protocol::Query.new(SpecConfig.instance.test_db, TEST_COLL, { name: 'alice' })
       end
 
       after do
@@ -281,7 +404,9 @@ describe Mongo::Server::Connection do
           connection.dispatch([ query_alice ])
         }.to raise_error(Mongo::Error::UnexpectedResponse)
 
-        expect(connection.dispatch([ query_alice ]).documents.first['name']).to eq('alice')
+        docs = connection.dispatch([ query_alice ]).documents
+        expect(docs).to_not be_empty
+        expect(docs.first['name']).to eq('alice')
       end
     end
 
@@ -292,15 +417,15 @@ describe Mongo::Server::Connection do
       end
 
       let(:insert) do
-        Mongo::Protocol::Insert.new(TEST_DB, TEST_COLL, documents)
+        Mongo::Protocol::Insert.new(SpecConfig.instance.test_db, TEST_COLL, documents)
       end
 
       let(:query_bob) do
-        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { name: 'bob' })
+        Mongo::Protocol::Query.new(SpecConfig.instance.test_db, TEST_COLL, { name: 'bob' })
       end
 
       let(:query_alice) do
-        Mongo::Protocol::Query.new(TEST_DB, TEST_COLL, { name: 'alice' })
+        Mongo::Protocol::Query.new(SpecConfig.instance.test_db, TEST_COLL, { name: 'alice' })
       end
 
       before do
@@ -357,7 +482,7 @@ describe Mongo::Server::Connection do
         end
 
         let(:command) do
-          Mongo::Protocol::Query.new(TEST_DB, '$cmd', selector, :limit => -1)
+          Mongo::Protocol::Query.new(SpecConfig.instance.test_db, '$cmd', selector, :limit => -1)
         end
 
         let(:reply) do
@@ -460,7 +585,7 @@ describe Mongo::Server::Connection do
     context 'when the process is forked' do
 
       let(:insert) do
-        Mongo::Protocol::Insert.new(TEST_DB, TEST_COLL, documents)
+        Mongo::Protocol::Insert.new(SpecConfig.instance.test_db, TEST_COLL, documents)
       end
 
       before do
@@ -568,18 +693,18 @@ describe Mongo::Server::Connection do
       let(:connection) do
         described_class.new(
           server,
-          :user => TEST_USER.name,
-          :password => TEST_USER.password,
-          :database => TEST_DB,
+          :user => SpecConfig.instance.test_user.name,
+          :password => SpecConfig.instance.test_user.password,
+          :database => SpecConfig.instance.test_db,
           :auth_mech => :mongodb_cr
         )
       end
 
       let(:user) do
         Mongo::Auth::User.new(
-          database: TEST_DB,
-          user: TEST_USER.name,
-          password: TEST_USER.password
+          database: SpecConfig.instance.test_db,
+          user: SpecConfig.instance.test_user.name,
+          password: SpecConfig.instance.test_user.password
         )
       end
 
@@ -683,7 +808,7 @@ describe Mongo::Server::Connection do
       context 'when a socket_timeout is in the options' do
 
         let(:options) do
-          TEST_OPTIONS.merge(connect_timeout: 3, socket_timeout: 5)
+          SpecConfig.instance.test_options.merge(connect_timeout: 3, socket_timeout: 5)
         end
 
         before do
@@ -702,7 +827,7 @@ describe Mongo::Server::Connection do
       context 'when a socket_timeout is not in the options' do
 
         let(:options) do
-          TEST_OPTIONS.merge(connect_timeout: 3, socket_timeout: nil)
+          SpecConfig.instance.test_options.merge(connect_timeout: 3, socket_timeout: nil)
         end
 
         before do
@@ -724,7 +849,7 @@ describe Mongo::Server::Connection do
       context 'when a socket_timeout is in the options' do
 
         let(:options) do
-          TEST_OPTIONS.merge(connect_timeout: nil, socket_timeout: 5)
+          SpecConfig.instance.test_options.merge(connect_timeout: nil, socket_timeout: 5)
         end
 
         before do
@@ -743,7 +868,7 @@ describe Mongo::Server::Connection do
       context 'when a socket_timeout is not in the options' do
 
         let(:options) do
-          TEST_OPTIONS.merge(connect_timeout: nil, socket_timeout: nil)
+          SpecConfig.instance.test_options.merge(connect_timeout: nil, socket_timeout: nil)
         end
 
         before do

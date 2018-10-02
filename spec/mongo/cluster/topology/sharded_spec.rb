@@ -22,19 +22,20 @@ describe Mongo::Cluster::Topology::Sharded do
     double('cluster').tap do |cl|
       allow(cl).to receive(:topology).and_return(topology)
       allow(cl).to receive(:app_metadata).and_return(app_metadata)
+      allow(cl).to receive(:options).and_return({})
     end
   end
 
   let(:mongos) do
-    Mongo::Server.new(address, cluster, monitoring, listeners, TEST_OPTIONS)
+    Mongo::Server.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options)
   end
 
   let(:standalone) do
-    Mongo::Server.new(address, cluster, monitoring, listeners, TEST_OPTIONS)
+    Mongo::Server.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options)
   end
 
   let(:replica_set) do
-    Mongo::Server.new(address, cluster, monitoring, listeners, TEST_OPTIONS)
+    Mongo::Server.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options)
   end
 
   let(:mongos_description) do

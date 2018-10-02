@@ -3,20 +3,7 @@ require 'spec_helper'
 describe Mongo::BulkWrite do
 
   before do
-    authorized_collection.delete_many
-  end
-
-  after do
-    authorized_collection.delete_many
-    collection_with_validator.drop
-  end
-
-  let(:collection_with_validator) do
-    begin; authorized_client[:validating].drop; rescue; end
-    authorized_client[:validating,
-                      :validator => { :a => { '$exists' => true } }].tap do |c|
-      c.create
-    end
+    authorized_collection.drop
   end
 
   let(:collection_invalid_write_concern) do
@@ -1935,12 +1922,18 @@ describe Mongo::BulkWrite do
               bulk_write.execute
             end
 
+            let(:started_events) do
+              EventSubscriber.started_events.select do |event|
+                event.command['insert']
+              end
+            end
+
             let(:first_txn_number) do
-              EventSubscriber.started_events[-2].command['txnNumber'].instance_variable_get(:@integer)
+              started_events[-2].command['txnNumber'].instance_variable_get(:@integer)
             end
 
             let(:second_txn_number) do
-              EventSubscriber.started_events[-1].command['txnNumber'].instance_variable_get(:@integer)
+              started_events[-1].command['txnNumber'].instance_variable_get(:@integer)
             end
 
             it 'inserts the documents' do
@@ -2139,12 +2132,17 @@ describe Mongo::BulkWrite do
   describe 'when the collection has a validator' do
     min_server_version '3.2'
 
-    before do
-      collection_with_validator.insert_many([{ :a => 1 }, { :a => 2 }])
+    let(:collection_with_validator) do
+      authorized_client[:validating,
+                        :validator => { :a => { '$exists' => true } }].tap do |c|
+        c.create
+      end
     end
 
-    after do
+    before do
+      begin; authorized_client[:validating].drop; rescue; end
       collection_with_validator.delete_many
+      collection_with_validator.insert_many([{ :a => 1 }, { :a => 2 }])
     end
 
     context 'when the documents are invalid' do

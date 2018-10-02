@@ -24,9 +24,9 @@ describe 'Max Staleness Spec' do
 
       let(:options) do
         if spec.heartbeat_frequency
-          TEST_OPTIONS.merge(heartbeat_frequency: spec.heartbeat_frequency)
+          SpecConfig.instance.test_options.merge(heartbeat_frequency: spec.heartbeat_frequency)
         else
-          TEST_OPTIONS.dup.tap do |opts|
+          SpecConfig.instance.test_options.dup.tap do |opts|
             opts.delete(:heartbeat_frequency)
           end
         end.merge!(server_selection_timeout: 0.2, connect_timeout: 0.1)
@@ -34,6 +34,7 @@ describe 'Max Staleness Spec' do
 
       let(:cluster) do
         double('cluster').tap do |c|
+          allow(c).to receive(:summary)
           allow(c).to receive(:topology).and_return(topology)
           allow(c).to receive(:single?).and_return(topology.single?)
           allow(c).to receive(:sharded?).and_return(topology.sharded?)
@@ -58,8 +59,10 @@ describe 'Max Staleness Spec' do
             allow(s).to receive(:secondary?).and_return(server['type'] == 'RSSecondary')
             allow(s).to receive(:primary?).and_return(server['type'] == 'RSPrimary')
             allow(s).to receive(:connectable?).and_return(true)
-            allow(s).to receive(:last_write_date).and_return(server['lastWrite']['lastWriteDate']['$numberLong'].to_i) if server['lastWrite']
-            allow(s).to receive(:last_scan).and_return(server['lastUpdateTime'])
+            allow(s).to receive(:last_write_date).and_return(
+              Time.at(server['lastWrite']['lastWriteDate']['$numberLong'].to_f / 1000)) if server['lastWrite']
+            allow(s).to receive(:last_scan).and_return(
+              Time.at(server['lastUpdateTime'].to_f / 1000))
             allow(s).to receive(:features).and_return(features)
           end
         end
@@ -67,9 +70,7 @@ describe 'Max Staleness Spec' do
 
       let(:in_latency_window) do
         spec.in_latency_window.collect do |server|
-          s = Mongo::Server.new(Mongo::Address.new(server['address']), cluster, monitoring, listeners, options)
-          s.monitor.stop!
-          s
+          Mongo::Server.new(Mongo::Address.new(server['address']), cluster, monitoring, listeners, options.merge(monitor: false))
         end
       end
 

@@ -1,7 +1,6 @@
 require 'spec_helper'
 
 describe Mongo::Operation::Indexes do
-
   describe '#execute' do
 
     let(:index_spec) do
@@ -9,6 +8,8 @@ describe Mongo::Operation::Indexes do
     end
 
     before do
+      authorized_collection.drop
+      authorized_collection.insert_one(test: 1)
       authorized_collection.indexes.create_one(index_spec, unique: true)
     end
 
@@ -19,7 +20,7 @@ describe Mongo::Operation::Indexes do
     let(:operation) do
       described_class.new({ selector: { listIndexes: TEST_COLL },
                             coll_name: TEST_COLL,
-                            db_name: TEST_DB })
+                            db_name: SpecConfig.instance.test_db })
     end
 
     let(:indexes) do

@@ -47,6 +47,9 @@ module Constraints
     before do
       topology = authorized_client.cluster.topology.class.name.sub(/.*::/, '')
       topology = topology.gsub(/([A-Z])/) { |match| '_' + match.downcase }.sub(/^_/, '')
+      if topology =~ /^replica_set/
+        topology = 'replica_set'
+      end
       unless topologies.include?(topology)
         skip "Topology #{topologies.join(' or ')} required, we have #{topology}"
       end
@@ -69,11 +72,18 @@ module Constraints
   def require_scram_sha_256_support
     before do
       $mongo_server_features ||= begin
-        $mongo_client ||= initialize_scanned_client!
-        $mongo_client.cluster.servers.first.features
+        scanned_client_server!.features
       end
       unless $mongo_server_features.scram_sha_256_enabled?
         skip "SCRAM SHA 256 is not enabled on the server"
+      end
+    end
+  end
+
+  def require_ssl
+    before do
+      unless SpecConfig.instance.ssl?
+        skip "SSL not enabled"
       end
     end
   end

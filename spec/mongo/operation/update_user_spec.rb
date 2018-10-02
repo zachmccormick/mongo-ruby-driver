@@ -21,15 +21,15 @@ describe Mongo::Operation::UpdateUser do
     end
 
     let(:operation) do
-      described_class.new(user: user_updated, db_name: TEST_DB)
+      described_class.new(user: user_updated, db_name: SpecConfig.instance.test_db)
     end
 
     before do
-      root_authorized_client.database.users.create(user)
-    end
-
-    after do
-      root_authorized_client.database.users.remove('durran')
+      users = root_authorized_client.database.users
+      if users.info('durran').any?
+        users.remove('durran')
+      end
+      users.create(user)
     end
 
     context 'when user update was successful' do

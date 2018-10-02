@@ -26,7 +26,7 @@ module Mongo
     # subcomponents.
     #
     # @since 2.1.0
-    CRUD_OPTIONS = [ :database, :read, :write ].freeze
+    CRUD_OPTIONS = [ :database, :read, :write, :retry_writes ].freeze
 
     # Valid client options.
     #
@@ -188,9 +188,10 @@ module Mongo
     #   seconds, in the connection pool for a connection to be checked in.
     # @option options [ Float ] :connect_timeout The timeout, in seconds, to
     #   attempt a connection.
-    # @option options [ Array<String> ] :compressors A list of potential compressors to use, in order of preference.
-    #   The driver chooses the first compressor that is also supported by the server. Currently the driver only
-    #   supports 'zlib'.
+    # @option options [ Array<String> ] :compressors A list of potential
+    #   compressors to use, in order of preference. The driver chooses the
+    #   first compressor that is also supported by the server. Currently the
+    #   driver only supports 'zlib'.
     # @option options [ Hash ] :read The read preference options. The hash
     #   may have the following items:
     #   - *:mode* -- read preference specified as a symbol; valid values are
@@ -250,10 +251,12 @@ module Mongo
     #   in which reads on a mongos are retried.
     # @option options [ Object ] :id_generator A custom object to generate ids
     #   for documents. Must respond to #generate.
-    # @option options [ String, Symbol ] :app_name Application name that is printed to the
-    #   mongod logs upon establishing a connection in server versions >= 3.4.
-    # @option options [ String ] :platform Platform information to include in the
-    #   metadata printed to the mongod logs upon establishing a connection in server versions >= 3.4.
+    # @option options [ String, Symbol ] :app_name Application name that is
+    #   printed to the mongod logs upon establishing a connection in server
+    #   versions >= 3.4.
+    # @option options [ String ] :platform Platform information to include in
+    #   the metadata printed to the mongod logs upon establishing a connection
+    #   in server versions >= 3.4.
     # @option options [ Integer ] :zlib_compression_level The Zlib compression level to use, if using compression.
     #   See Ruby's Zlib module for valid levels.
     # @option options [ true, false ] :retry_writes Retry writes once when
@@ -284,6 +287,12 @@ module Mongo
         @cluster = Cluster.new([], monitoring, @options)
         sdam_proc.call(self)
       end
+      # We share clusters when a new client with different CRUD_OPTIONS
+      # is requested; therefore, cluster should not be getting any of these
+      # options upon instantiation
+      cluster_options = @options.reject do |key, value|
+        CRUD_OPTIONS.include?(key.to_sym)
+      end
       @cluster = Cluster.new(addresses, monitoring, @options)
       yield(self) if block_given?
     end
@@ -297,7 +306,20 @@ module Mongo
     #
     # @since 2.0.0
     def inspect
-      "#<Mongo::Client:0x#{object_id} cluster=#{cluster.addresses.join(', ')}>"
+      "#<Mongo::Client:0x#{object_id} cluster=#{cluster.summary}>"
+    end
+
+    # Get a summary of the client state.
+    #
+    # @example Inspect the client.
+    #   client.summary
+    #
+    # @return [ String ] Summary string.
+    #
+    # @since 2.7.0
+    # @api experimental
+    def summary
+      "#<Client cluster=#{cluster.summary}>"
     end
 
     # Get the server selector. It either uses the read preference
@@ -332,22 +354,22 @@ module Mongo
       @read_preference ||= options[:read]
     end
 
-    # Use the database with the provided name. This will switch the current
-    # database the client is operating on.
+    # Creates a new client configured to use the database with the provided
+    # name, and using the other options configured in this client.
     #
-    # @example Use the provided database.
+    # @example Create a client for the `users' database.
     #   client.use(:users)
     #
     # @param [ String, Symbol ] name The name of the database to use.
     #
-    # @return [ Mongo::Client ] The new client with new database.
+    # @return [ Mongo::Client ] A new client instance.
     #
     # @since 2.0.0
     def use(name)
       with(database: name)
     end
 
-    # Provides a new client with the passed options merged over the existing
+    # Creates a new client with the passed options merged over the existing
     # options of this client. Useful for one-offs to change specific options
     # without altering the original client.
     #

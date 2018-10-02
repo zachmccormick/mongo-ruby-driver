@@ -1,4 +1,3 @@
-
 # Copyright (C) 2014-2018 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -66,6 +65,26 @@ module Mongo
         )
         cluster.add_hosts(updated)
         cluster.remove_hosts(updated)
+
+        if cluster.topology.is_a?(::Mongo::Cluster::Topology::Unknown) && updated.replica_set_name && updated.replica_set_name != ''
+          old_topology = cluster.topology
+          new_cls = if updated.primary?
+            ::Mongo::Cluster::Topology::ReplicaSetWithPrimary
+          else
+            ::Mongo::Cluster::Topology::ReplicaSetNoPrimary
+          end
+          new_topology = new_cls.new(
+            cluster.topology.options.merge(
+              replica_set: updated.replica_set_name,
+            ), cluster.topology.monitoring)
+          cluster.send(:instance_variable_set, '@topology', new_topology)
+          publish_sdam_event(
+            Monitoring::TOPOLOGY_CHANGED,
+            Monitoring::Event::TopologyChanged.new(
+              old_topology, new_topology,
+            )
+          )
+        end
       end
     end
   end

@@ -16,7 +16,6 @@ require 'mongo/cluster/topology'
 require 'mongo/cluster/reapers/socket_reaper'
 require 'mongo/cluster/reapers/cursor_reaper'
 require 'mongo/cluster/periodic_executor'
-require 'mongo/cluster/app_metadata'
 
 module Mongo
 
@@ -55,6 +54,70 @@ module Mongo
     # @since 2.5.0
     CLUSTER_TIME = 'clusterTime'.freeze
 
+    # Instantiate the new cluster.
+    #
+    # @api private
+    #
+    # @example Instantiate the cluster.
+    #   Mongo::Cluster.new(["127.0.0.1:27017"], monitoring)
+    #
+    # @note Cluster should never be directly instantiated outside of a Client.
+    #
+    # @note When connecting to a mongodb+srv:// URI, the client expands such a
+    #   URI into a list of servers and passes that list to the Cluster
+    #   constructor. When connecting to a standalone mongod, the Cluster
+    #   constructor receives the corresponding address as an array of one string.
+    #
+    # @param [ Array<String> ] seeds The addresses of the configured servers
+    # @param [ Monitoring ] monitoring The monitoring.
+    # @param [ Hash ] options Options. Client constructor forwards its
+    #   options to Cluster constructor, although Cluster recognizes
+    #   only a subset of the options recognized by Client.
+    #
+    # @since 2.0.0
+    def initialize(seeds, monitoring, options = Options::Redacted.new)
+      @servers = []
+      @monitoring = monitoring
+      @event_listeners = Event::Listeners.new
+      @options = options.freeze
+      @app_metadata = Server::AppMetadata.new(@options)
+      @update_lock = Mutex.new
+      @pool_lock = Mutex.new
+      @cluster_time = nil
+      @cluster_time_lock = Mutex.new
+      @topology = Topology.initial(seeds, monitoring, options)
+      Session::SessionPool.create(self)
+
+      # The opening topology is always unknown with no servers.
+      # https://github.com/mongodb/specifications/pull/388
+      opening_topology = Topology::Unknown.new(options, monitoring, [])
+
+      publish_sdam_event(
+        Monitoring::TOPOLOGY_OPENING,
+        Monitoring::Event::TopologyOpening.new(opening_topology)
+      )
+
+      subscribe_to(Event::STANDALONE_DISCOVERED, Event::StandaloneDiscovered.new(self))
+      subscribe_to(Event::DESCRIPTION_CHANGED, Event::DescriptionChanged.new(self))
+      subscribe_to(Event::MEMBER_DISCOVERED, Event::MemberDiscovered.new(self))
+
+      seeds.each{ |seed| add(seed) }
+
+      publish_sdam_event(
+        Monitoring::TOPOLOGY_CHANGED,
+        Monitoring::Event::TopologyChanged.new(opening_topology, @topology)
+      ) if seeds.size > 1
+
+      @cursor_reaper = CursorReaper.new
+      @socket_reaper = SocketReaper.new(self)
+      @periodic_executor = PeriodicExecutor.new(@cursor_reaper, @socket_reaper)
+      @periodic_executor.run!
+
+      ObjectSpace.define_finalizer(self, self.class.finalize(pools, @periodic_executor, @session_pool))
+
+      @connected = true
+    end
+
     # @return [ Hash ] The options hash.
     attr_reader :options
 
@@ -64,7 +127,7 @@ module Mongo
     # @return [ Object ] The cluster topology.
     attr_reader :topology
 
-    # @return [ Mongo::Cluster::AppMetadata ] The application metadata, used for connection
+    # @return [ Mongo::Server::AppMetadata ] The application metadata, used for connection
     #   handshakes.
     #
     # @since 2.4.0
@@ -116,9 +179,10 @@ module Mongo
       address = Address.new(host, options)
       if !addresses.include?(address)
         if addition_allowed?(address)
-          @update_lock.synchronize { @addresses.push(address) }
-          server = Server.new(address, self, @monitoring, event_listeners, options)
+          server = Server.new(address, self, @monitoring, event_listeners, options.merge(
+            monitor: false))
           @update_lock.synchronize { @servers.push(server) }
+          server.start_monitoring
           server
         end
       end
@@ -150,65 +214,6 @@ module Mongo
     # @since 2.4.0
     def has_writable_server?
       topology.has_writable_server?(self)
-    end
-
-    # Instantiate the new cluster.
-    #
-    # @api private
-    #
-    # @example Instantiate the cluster.
-    #   Mongo::Cluster.new(["127.0.0.1:27017"], monitoring)
-    #
-    # @note Cluster should never be directly instantiated outside of a Client.
-    #
-    # @note When connecting to a mongodb+srv:// URI, the client expands such a
-    #   URI into a list of servers and passes that list to the Cluster
-    #   constructor. When connecting to a standalone mongod, the Cluster
-    #   constructor receives the corresponding address as an array of one string.
-    #
-    # @param [ Array<String> ] seeds The addresses of the configured servers
-    # @param [ Monitoring ] monitoring The monitoring.
-    # @param [ Hash ] options Options. Client constructor forwards its
-    #   options to Cluster constructor, although Cluster recognizes
-    #   only a subset of the options recognized by Client.
-    #
-    # @since 2.0.0
-    def initialize(seeds, monitoring, options = Options::Redacted.new)
-      @addresses = []
-      @servers = []
-      @monitoring = monitoring
-      @event_listeners = Event::Listeners.new
-      @options = options.freeze
-      @app_metadata = AppMetadata.new(self)
-      @update_lock = Mutex.new
-      @pool_lock = Mutex.new
-      @cluster_time = nil
-      @cluster_time_lock = Mutex.new
-      @topology = Topology.initial(seeds, monitoring, options)
-      Session::SessionPool.create(self)
-
-      publish_sdam_event(
-        Monitoring::TOPOLOGY_OPENING,
-        Monitoring::Event::TopologyOpening.new(@topology)
-      )
-
-      subscribe_to(Event::STANDALONE_DISCOVERED, Event::StandaloneDiscovered.new(self))
-      subscribe_to(Event::DESCRIPTION_CHANGED, Event::DescriptionChanged.new(self))
-      subscribe_to(Event::MEMBER_DISCOVERED, Event::MemberDiscovered.new(self))
-
-      seeds.each{ |seed| add(seed) }
-
-      publish_sdam_event(
-        Monitoring::TOPOLOGY_CHANGED,
-        Monitoring::Event::TopologyChanged.new(@topology, @topology)
-      ) if @servers.size > 1
-
-      @cursor_reaper = CursorReaper.new
-      @socket_reaper = SocketReaper.new(self)
-      @periodic_executor = PeriodicExecutor.new(@cursor_reaper, @socket_reaper)
-      @periodic_executor.run!
-
-      ObjectSpace.define_finalizer(self, self.class.finalize(pools, @periodic_executor, @session_pool))
     end
 
     # Finalize the cluster for garbage collection. Disconnects all the scoped
@@ -243,7 +248,14 @@ module Mongo
     #
     # @since 2.0.0
     def inspect
-      "#<Mongo::Cluster:0x#{object_id} servers=#{servers} topology=#{topology.display_name}>"
+      "#<Mongo::Cluster:0x#{object_id} servers=#{servers} topology=#{topology.summary}>"
+    end
+
+    # @api experimental
+    def summary
+      "#<Cluster " +
+      "topology=#{topology.summary} "+
+      "servers=[#{servers.map(&:summary).join(',')}]>"
     end
 
     # Get the next primary server we can send an operation to.
@@ -275,7 +287,16 @@ module Mongo
     #
     # @since 2.0.0
     def elect_primary!(description)
+      old_topology = @topology
       @topology = topology.elect_primary(description, servers_list)
+      if @topology != old_topology
+        publish_sdam_event(
+          Monitoring::TOPOLOGY_CHANGED,
+          Monitoring::Event::TopologyChanged.new(
+            old_topology, @topology,
+          )
+        )
+      end
     end
 
     # Get the maximum number of times the cluster can retry a read operation on
@@ -346,12 +367,15 @@ module Mongo
       address = Address.new(host)
       removed_servers = @servers.select { |s| s.address == address }
       @update_lock.synchronize { @servers = @servers - removed_servers }
-      removed_servers.each{ |server| server.disconnect! } if removed_servers
+      if removed_servers
+        removed_servers.each do |server|
+          server.disconnect!
+        end
+      end
       publish_sdam_event(
         Monitoring::SERVER_CLOSED,
         Monitoring::Event::ServerClosed.new(address, topology)
       )
-      @update_lock.synchronize { @addresses.reject! { |addr| addr == address } }
     end
 
     # Force a scan of all known servers in the cluster.
@@ -392,7 +416,11 @@ module Mongo
     # @since 2.1.0
     def disconnect!
       @periodic_executor.stop!
-      @servers.each { |server| server.disconnect! } and true
+      @servers.each do |server|
+        server.disconnect!
+      end
+      @connected = false
+      true
     end
 
     # Reconnect all servers.
@@ -405,8 +433,21 @@ module Mongo
     # @since 2.1.0
     def reconnect!
       scan!
-      servers.each { |server| server.reconnect! }
-      @periodic_executor.restart! and true
+      servers.each do |server|
+        server.reconnect!
+      end
+      @periodic_executor.restart!
+      @connected = true
+    end
+
+    # Whether the cluster object is connected to its cluster.
+    #
+    # @return [ true|false ] Whether the cluster is connected.
+    #
+    # @api private
+    # @since 2.7.0
+    def connected?
+      !!@connected
     end
 
     # Add hosts in a description to the cluster.
@@ -470,7 +511,7 @@ module Mongo
     #
     # @since 2.0.6
     def addresses
-      addresses_list
+      servers_list.map(&:address).dup
     end
 
     # The logical session timeout value in minutes.
@@ -548,10 +589,6 @@ module Mongo
 
     def servers_list
       @update_lock.synchronize { @servers.dup }
-    end
-
-    def addresses_list
-      @update_lock.synchronize { @addresses.dup }
     end
   end
 end

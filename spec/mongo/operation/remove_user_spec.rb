@@ -5,14 +5,18 @@ describe Mongo::Operation::RemoveUser do
   describe '#execute' do
 
     before do
-      root_authorized_client.database.users.create(
+      users = root_authorized_client.database.users
+      if users.info('durran').any?
+        users.remove('durran')
+      end
+      users.create(
         'durran',
         password: 'password', roles: [ Mongo::Auth::Roles::READ_WRITE ]
       )
     end
 
     let(:operation) do
-      described_class.new(user_name: 'durran', db_name: TEST_DB)
+      described_class.new(user_name: 'durran', db_name: SpecConfig.instance.test_db)
     end
 
     context 'when user removal was successful' do

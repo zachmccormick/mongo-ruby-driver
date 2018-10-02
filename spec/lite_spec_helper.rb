@@ -1,18 +1,18 @@
 COVERAGE_MIN = 90
 CURRENT_PATH = File.expand_path(File.dirname(__FILE__))
-SERVER_DISCOVERY_TESTS = Dir.glob("#{CURRENT_PATH}/support/sdam/**/*.yml")
-SDAM_MONITORING_TESTS = Dir.glob("#{CURRENT_PATH}/support/sdam_monitoring/*.yml")
-SERVER_SELECTION_RTT_TESTS = Dir.glob("#{CURRENT_PATH}/support/server_selection/rtt/*.yml")
-SERVER_SELECTION_TESTS = Dir.glob("#{CURRENT_PATH}/support/server_selection/selection/**/*.yml")
-MAX_STALENESS_TESTS = Dir.glob("#{CURRENT_PATH}/support/max_staleness/**/*.yml")
-CRUD_TESTS = Dir.glob("#{CURRENT_PATH}/support/crud_tests/**/*.yml")
-RETRYABLE_WRITES_TESTS = Dir.glob("#{CURRENT_PATH}/support/retryable_writes_tests/**/*.yml")
-COMMAND_MONITORING_TESTS = Dir.glob("#{CURRENT_PATH}/support/command_monitoring/**/*.yml")
-CONNECTION_STRING_TESTS = Dir.glob("#{CURRENT_PATH}/support/connection_string_tests/*.yml")
-DNS_SEEDLIST_DISCOVERY_TESTS = Dir.glob("#{CURRENT_PATH}/support/dns_seedlist_discovery_tests/*.yml")
-GRIDFS_TESTS = Dir.glob("#{CURRENT_PATH}/support/gridfs_tests/*.yml")
-TRANSACTIONS_TESTS = Dir.glob("#{CURRENT_PATH}/support/transactions_tests/*.yml")
-CHANGE_STREAMS_TESTS = Dir.glob("#{CURRENT_PATH}/support/change_streams_tests/*.yml")
+SERVER_DISCOVERY_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/sdam/**/*.yml")
+SDAM_MONITORING_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/sdam_monitoring/*.yml")
+SERVER_SELECTION_RTT_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/server_selection_rtt/*.yml")
+SERVER_SELECTION_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/server_selection/**/*.yml")
+MAX_STALENESS_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/max_staleness/**/*.yml")
+CRUD_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/crud/**/*.yml")
+RETRYABLE_WRITES_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/retryable_writes/**/*.yml")
+COMMAND_MONITORING_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/command_monitoring/**/*.yml")
+CONNECTION_STRING_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/connection_string/*.yml")
+DNS_SEEDLIST_DISCOVERY_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/dns_seedlist_discovery/*.yml")
+GRIDFS_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/gridfs/*.yml")
+TRANSACTIONS_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/transactions/*.yml")
+CHANGE_STREAMS_TESTS = Dir.glob("#{CURRENT_PATH}/spec_tests/data/change_streams/*.yml")
 
 if ENV['DRIVERS_TOOLS']
   CLIENT_CERT_PEM = ENV['DRIVER_TOOLS_CLIENT_CERT_PEM']
@@ -35,6 +35,11 @@ require 'mongo'
 begin
   require 'byebug'
 rescue LoadError
+  # jruby - try pry
+  begin
+    require 'pry'
+  rescue LoadError
+  end
 end
 
 require 'support/spec_config'
@@ -45,6 +50,7 @@ unless SpecConfig.instance.client_debug?
 end
 Encoding.default_external = Encoding::UTF_8
 
+require 'ice_nine'
 require 'support/matchers'
 require 'support/lite_constraints'
 require 'support/event_subscriber'
@@ -58,11 +64,37 @@ require 'support/connection_string'
 require 'support/gridfs'
 require 'support/transactions'
 require 'support/change_streams'
+require 'support/common_shortcuts'
+
+if SpecConfig.instance.mri?
+  require 'timeout_interrupt'
+else
+  require 'timeout'
+  TimeoutInterrupt = Timeout
+end
 
 RSpec.configure do |config|
   if ENV['CI'] && SpecConfig.instance.jruby?
     config.formatter = 'documentation'
   end
 
+  config.extend(CommonShortcuts)
   config.extend(LiteConstraints)
+
+  if SpecConfig.instance.ci?
+    config.add_formatter(RSpec::Core::Formatters::JsonFormatter, File.join(File.dirname(__FILE__), '../tmp/rspec.json'))
+  end
+
+  if SpecConfig.instance.ci?
+    # Allow a max of 30 seconds per test.
+    # Tests should take under 10 seconds ideally but it seems
+    # we have some that run for more than 10 seconds in CI.
+    config.around(:each) do |example|
+      TimeoutInterrupt.timeout(30) do
+        example.run
+      end
+    end
+  end
 end
+
+EventSubscriber.initialize

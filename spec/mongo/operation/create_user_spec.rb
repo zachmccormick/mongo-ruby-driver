@@ -13,11 +13,14 @@ describe Mongo::Operation::CreateUser do
     end
 
     let(:operation) do
-      described_class.new(user: user, db_name: TEST_DB)
+      described_class.new(user: user, db_name: SpecConfig.instance.test_db)
     end
 
-    after do
-      root_authorized_client.database.users.remove('durran')
+    before do
+      users = root_authorized_client.database.users
+      if users.info('durran').any?
+        users.remove('durran')
+      end
     end
 
     context 'when user creation was successful' do

@@ -2,10 +2,6 @@ require 'spec_helper'
 
 describe Mongo::Client do
 
-  after do
-    begin; client.close; rescue; end
-  end
-
   describe '.new' do
     describe 'options' do
       describe 'read' do
@@ -13,7 +9,7 @@ describe Mongo::Client do
           :primary, :primary_preferred, :secondary, :secondary_preferred,  :nearest
         ].each do |sym|
           it "accepts #{sym} as symbol" do
-            client = described_class.new(['127.0.0.1:27017'],
+            client = new_local_client(['127.0.0.1:27017'],
               :read => {:mode => sym})
             # the key got converted to a string here
             expect(client.read_preference).to eq({'mode' => sym})
@@ -22,7 +18,7 @@ describe Mongo::Client do
           # string keys are not documented as being allowed
           # but the code accepts them
           it "accepts #{sym} as string" do
-            client = described_class.new(['127.0.0.1:27017'],
+            client = new_local_client(['127.0.0.1:27017'],
               :read => {:mode => sym.to_s})
             # the key got converted to a string here
             # the value remains a string
@@ -32,28 +28,28 @@ describe Mongo::Client do
 
         it 'rejects bogus read preference as symbol' do
           expect do
-            client = described_class.new(['127.0.0.1:27017'],
+            client = new_local_client(['127.0.0.1:27017'],
               :read => {:mode => :bogus})
           end.to raise_error(Mongo::Error::InvalidReadOption, 'Invalid read option: {"mode"=>:bogus}: mode bogus is not one of recognized modes')
         end
 
         it 'rejects bogus read preference as string' do
           expect do
-            client = described_class.new(['127.0.0.1:27017'],
+            client = new_local_client(['127.0.0.1:27017'],
               :read => {:mode => 'bogus'})
           end.to raise_error(Mongo::Error::InvalidReadOption, 'Invalid read option: {"mode"=>"bogus"}: mode bogus is not one of recognized modes')
         end
 
         it 'rejects read option specified as a string' do
           expect do
-            client = described_class.new(['127.0.0.1:27017'],
+            client = new_local_client(['127.0.0.1:27017'],
               :read => 'primary')
           end.to raise_error(Mongo::Error::InvalidReadOption, 'Invalid read option: primary: must be a hash')
         end
 
         it 'rejects read option specified as a symbol' do
           expect do
-            client = described_class.new(['127.0.0.1:27017'],
+            client = new_local_client(['127.0.0.1:27017'],
               :read => :primary)
           end.to raise_error(Mongo::Error::InvalidReadOption, 'Invalid read option: primary: must be a hash')
         end
@@ -64,26 +60,22 @@ describe Mongo::Client do
   describe '#==' do
 
     let(:client) do
-      described_class.new(
+      new_local_client(
         ['127.0.0.1:27017'],
         :read => { :mode => :primary },
-        :database => TEST_DB
+        :database => SpecConfig.instance.test_db
       )
     end
 
     context 'when the other is a client' do
 
-      after do
-        other.close
-      end
-
       context 'when the options and cluster are equal' do
 
         let(:other) do
-          described_class.new(
+          new_local_client(
             ['127.0.0.1:27017'],
             :read => { :mode => :primary },
-            :database => TEST_DB
+            :database => SpecConfig.instance.test_db
           )
         end
 
@@ -95,10 +87,10 @@ describe Mongo::Client do
       context 'when the options are not equal' do
 
         let(:other) do
-          described_class.new(
+          new_local_client(
             ['127.0.0.1:27017'],
             :read => { :mode => :secondary },
-            :database => TEST_DB
+            :database => SpecConfig.instance.test_db
           )
         end
 
@@ -110,10 +102,10 @@ describe Mongo::Client do
       context 'when cluster is not equal' do
 
         let(:other) do
-          described_class.new(
+          new_local_client(
             ['127.0.0.1:27010'],
             :read => { :mode => :primary },
-            :database => TEST_DB
+            :database => SpecConfig.instance.test_db
           )
         end
 
@@ -134,7 +126,7 @@ describe Mongo::Client do
   describe '#[]' do
 
     let(:client) do
-      described_class.new(['127.0.0.1:27017'], :database => TEST_DB)
+      new_local_client(['127.0.0.1:27017'], :database => SpecConfig.instance.test_db)
     end
 
     shared_examples_for 'a collection switching object' do
@@ -170,26 +162,22 @@ describe Mongo::Client do
   describe '#eql' do
 
     let(:client) do
-      described_class.new(
+      new_local_client(
         ['127.0.0.1:27017'],
         :read => { :mode => :primary },
-        :database => TEST_DB
+        :database => SpecConfig.instance.test_db
       )
     end
 
     context 'when the other is a client' do
 
-      after do
-        other.close
-      end
-
       context 'when the options and cluster are equal' do
 
         let(:other) do
-          described_class.new(
+          new_local_client(
             ['127.0.0.1:27017'],
             :read => { :mode => :primary },
-            :database => TEST_DB
+            :database => SpecConfig.instance.test_db
           )
         end
 
@@ -201,10 +189,10 @@ describe Mongo::Client do
       context 'when the options are not equal' do
 
         let(:other) do
-          described_class.new(
+          new_local_client(
             ['127.0.0.1:27017'],
             :read => { :mode => :secondary },
-            :database => TEST_DB
+            :database => SpecConfig.instance.test_db
           )
         end
 
@@ -216,10 +204,10 @@ describe Mongo::Client do
       context 'when the cluster is not equal' do
 
         let(:other) do
-          described_class.new(
+          new_local_client(
             ['127.0.0.1:27010'],
             :read => { :mode => :primary },
-            :database => TEST_DB
+            :database => SpecConfig.instance.test_db
           )
         end
 
@@ -232,10 +220,10 @@ describe Mongo::Client do
     context 'when the other is not a client' do
 
       let(:client) do
-        described_class.new(
+        new_local_client(
           ['127.0.0.1:27017'],
           :read => { :mode => :primary },
-          :database => TEST_DB
+          :database => SpecConfig.instance.test_db
         )
       end
 
@@ -248,12 +236,12 @@ describe Mongo::Client do
   describe '#hash' do
 
     let(:client) do
-      described_class.new(
+      new_local_client(
         ['127.0.0.1:27017'],
         :read => { :mode => :primary },
         :local_threshold => 0.010,
         :server_selection_timeout => 10000,
-        :database => TEST_DB
+        :database => SpecConfig.instance.test_db
       )
     end
 
@@ -261,7 +249,7 @@ describe Mongo::Client do
       Mongo::Options::Redacted.new(:read => { :mode => :primary },
                                     :local_threshold => 0.010,
                                     :server_selection_timeout => 10000,
-                                    :database => TEST_DB)
+                                    :database => SpecConfig.instance.test_db)
     end
 
     let(:expected) do
@@ -276,26 +264,24 @@ describe Mongo::Client do
   describe '#inspect' do
 
     let(:client) do
-      described_class.new(
+      new_local_client(
         ['127.0.0.1:27017'],
         :read => { :mode => :primary },
-        :database => TEST_DB
+        :database => SpecConfig.instance.test_db
       )
     end
 
     it 'returns the cluster information' do
-      expect(client.inspect).to include(
-        "<Mongo::Client:0x#{client.object_id} cluster=127.0.0.1:27017"
-      )
+      expect(client.inspect).to match(/Cluster(.|\n)*topology=(.|\n)*servers=/)
     end
 
     context 'when there is sensitive data in the options' do
 
       let(:client) do
-        described_class.new(
+        new_local_client(
             ['127.0.0.1:27017'],
             :read => { :mode => :primary },
-            :database => TEST_DB,
+            :database => SpecConfig.instance.test_db,
             :password => 'some_password',
             :user => 'emily'
         )
@@ -318,7 +304,7 @@ describe Mongo::Client do
         end
 
         let(:client) do
-          described_class.new([default_address.seed], authorized_client.options.merge(options))
+          new_local_client([default_address.seed], authorized_client.options.merge(options))
         end
 
         it 'sets the option' do
@@ -329,7 +315,7 @@ describe Mongo::Client do
       context 'when compressors are provided' do
 
         let(:client) do
-          described_class.new([default_address.seed], authorized_client.options.merge(options))
+          new_local_client([default_address.seed], authorized_client.options.merge(options))
         end
 
         context 'when the compressor is supported' do
@@ -427,7 +413,7 @@ describe Mongo::Client do
       context 'when a zlib_compression_level option is provided', if: testing_compression? do
 
         let(:client) do
-          described_class.new([default_address.seed], TEST_OPTIONS.merge(zlib_compression_level: 1))
+          new_local_client([default_address.seed], SpecConfig.instance.test_options.merge(zlib_compression_level: 1))
         end
 
         it 'sets the option on the client' do
@@ -455,7 +441,7 @@ describe Mongo::Client do
         end
 
         let(:client) do
-          described_class.new(['127.0.0.1:27017'], TEST_OPTIONS.merge(options))
+          new_local_client(['127.0.0.1:27017'], SpecConfig.instance.test_options.merge(options))
         end
 
         it 'sets the ssl option' do
@@ -510,7 +496,7 @@ describe Mongo::Client do
       context 'when no database is provided' do
 
         let(:client) do
-          described_class.new(['127.0.0.1:27017'], :read => { :mode => :secondary })
+          new_local_client(['127.0.0.1:27017'], :read => { :mode => :secondary })
         end
 
         it 'defaults the database to admin' do
@@ -521,7 +507,7 @@ describe Mongo::Client do
       context 'when a database is provided' do
 
         let(:client) do
-          described_class.new(['127.0.0.1:27017'], :database => :testdb)
+          new_local_client(['127.0.0.1:27017'], :database => :testdb)
         end
 
         it 'sets the current database' do
@@ -549,7 +535,7 @@ describe Mongo::Client do
       context 'when providing a heartbeat_frequency' do
 
         let(:client) do
-          described_class.new(['127.0.0.1:27017'], :heartbeat_frequency => 2)
+          new_local_client(['127.0.0.1:27017'], :heartbeat_frequency => 2)
         end
 
         it 'sets the heartbeat frequency' do
@@ -560,7 +546,7 @@ describe Mongo::Client do
       context 'when min_pool_size is provided' do
 
         let(:client) do
-          described_class.new(['127.0.0.1:27017'], options)
+          new_local_client(['127.0.0.1:27017'], options)
         end
 
         context 'when max_pool_size is provided' do
@@ -660,7 +646,7 @@ describe Mongo::Client do
       context 'when max_pool_size and min_pool_size are both nil' do
 
         let(:client) do
-          described_class.new(['127.0.0.1:27017'], options)
+          new_local_client(['127.0.0.1:27017'], options)
         end
 
         let(:options) do
@@ -683,7 +669,7 @@ describe Mongo::Client do
         end
 
         let(:client) do
-          described_class.new(['127.0.0.1:27017'], :platform => 'mongoid-6.0.2')
+          new_local_client(['127.0.0.1:27017'], :platform => 'mongoid-6.0.2')
         end
 
         it 'includes the platform info in the app metadata' do
@@ -698,7 +684,7 @@ describe Mongo::Client do
         end
 
         let(:client) do
-          described_class.new(['127.0.0.1:27017'])
+          new_local_client(['127.0.0.1:27017'])
         end
 
         let(:platform_string) do
@@ -725,7 +711,7 @@ describe Mongo::Client do
         end
 
         let(:client) do
-          described_class.new(uri)
+          new_local_client(uri)
         end
 
         it 'sets the database' do
@@ -740,7 +726,7 @@ describe Mongo::Client do
         end
 
         let(:client) do
-          described_class.new(uri)
+          new_local_client(uri)
         end
 
         it 'sets the database' do
@@ -755,7 +741,7 @@ describe Mongo::Client do
         end
 
         let(:client) do
-          described_class.new(uri)
+          new_local_client(uri)
         end
 
         it 'defaults the database to admin' do
@@ -770,7 +756,7 @@ describe Mongo::Client do
         end
 
         let(:client) do
-          described_class.new(uri)
+          new_local_client(uri)
         end
 
         let(:expected_options) do
@@ -870,7 +856,7 @@ describe Mongo::Client do
         end
 
         let(:client) do
-          described_class.new(uri, :write => { :w => 3 })
+          new_local_client(uri, :write => { :w => 3 })
         end
 
         let(:expected_options) do
@@ -889,7 +875,7 @@ describe Mongo::Client do
         end
 
         let(:client) do
-          described_class.new(uri, :write => { :w => 4 })
+          new_local_client(uri, :write => { :w => 4 })
         end
 
         let(:expected_options) do
@@ -908,18 +894,18 @@ describe Mongo::Client do
         end
 
         let(:client) do
-          described_class.new(uri)
+          new_local_client(uri)
         end
 
         it 'sets the correct cluster topology' do
-          expect(client.cluster.topology).to be_a(Mongo::Cluster::Topology::ReplicaSet)
+          expect(client.cluster.topology).to be_a(Mongo::Cluster::Topology::ReplicaSetNoPrimary)
         end
       end
 
       context 'when an invalid option is provided' do
 
         let(:client) do
-          described_class.new(['127.0.0.1:27017'], :ssl => false, :invalid => :test)
+          new_local_client(['127.0.0.1:27017'], :ssl => false, :invalid => :test)
         end
 
         it 'does not set the option' do
@@ -943,8 +929,8 @@ describe Mongo::Client do
     context 'when there is a read preference set' do
 
       let(:client) do
-        described_class.new(['127.0.0.1:27017'],
-                            :database => TEST_DB,
+        new_local_client(['127.0.0.1:27017'],
+                            :database => SpecConfig.instance.test_db,
                             :read => mode,
                             :server_selection_timeout => 2)
       end
@@ -1015,8 +1001,8 @@ describe Mongo::Client do
       context 'when no mode provided' do
 
         let(:client) do
-          described_class.new(['127.0.0.1:27017'],
-                              :database => TEST_DB,
+          new_local_client(['127.0.0.1:27017'],
+                              :database => SpecConfig.instance.test_db,
                               :server_selection_timeout => 2)
         end
 
@@ -1028,7 +1014,7 @@ describe Mongo::Client do
       context 'when the read preference is printed' do
 
         let(:client) do
-          described_class.new([ default_address.to_s ], options)
+          new_local_client([ default_address.to_s ], options)
         end
 
         let(:options) do
@@ -1057,8 +1043,8 @@ describe Mongo::Client do
   describe '#read_preference' do
 
     let(:client) do
-      described_class.new(['127.0.0.1:27017'],
-                          :database => TEST_DB,
+      new_local_client(['127.0.0.1:27017'],
+                          :database => SpecConfig.instance.test_db,
                           :read => mode,
                           :server_selection_timeout => 2)
     end
@@ -1125,8 +1111,8 @@ describe Mongo::Client do
     context 'when no mode provided' do
 
       let(:client) do
-        described_class.new(['127.0.0.1:27017'],
-                            :database => TEST_DB,
+        new_local_client(['127.0.0.1:27017'],
+                            :database => SpecConfig.instance.test_db,
                             :server_selection_timeout => 2)
       end
 
@@ -1139,7 +1125,7 @@ describe Mongo::Client do
   describe '#use' do
 
     let(:client) do
-      described_class.new(['127.0.0.1:27017'], :database => TEST_DB)
+      new_local_client(['127.0.0.1:27017'], :database => SpecConfig.instance.test_db)
     end
 
     shared_examples_for 'a database switching object' do
@@ -1184,7 +1170,7 @@ describe Mongo::Client do
   describe '#with' do
 
     let(:client) do
-      described_class.new(['127.0.0.1:27017'], :database => TEST_DB)
+      new_local_client(['127.0.0.1:27017'], :database => SpecConfig.instance.test_db)
     end
 
     context 'when providing nil' do
@@ -1232,9 +1218,9 @@ describe Mongo::Client do
     context 'when the write concern is not changed' do
 
       let(:client) do
-        described_class.new(
+        new_local_client(
           ['127.0.0.1:27017'],
-          :read => { :mode => :secondary }, :write => { :w => 1 }, :database => TEST_DB
+          :read => { :mode => :secondary }, :write => { :w => 1 }, :database => SpecConfig.instance.test_db
         )
       end
 
@@ -1245,13 +1231,13 @@ describe Mongo::Client do
       let(:new_options) do
         Mongo::Options::Redacted.new(:read => { :mode => :primary },
                                              :write => { :w => 1 },
-                                             :database => TEST_DB)
+                                             :database => SpecConfig.instance.test_db)
       end
 
       let(:original_options) do
         Mongo::Options::Redacted.new(:read => { :mode => :secondary },
                                              :write => { :w => 1 },
-                                             :database => TEST_DB)
+                                             :database => SpecConfig.instance.test_db)
       end
 
       it 'returns a new client' do
@@ -1274,7 +1260,7 @@ describe Mongo::Client do
     context 'when the write concern is changed' do
 
       let(:client) do
-        described_class.new(['127.0.0.1:27017'], :write => { :w => 1 }, :database => TEST_DB)
+        new_local_client(['127.0.0.1:27017'], :write => { :w => 1 }, :database => SpecConfig.instance.test_db)
       end
 
       context 'when the write concern has not been accessed' do
@@ -1331,7 +1317,7 @@ describe Mongo::Client do
 
     context 'when client is created with ipv6 address' do
       let(:client) do
-        described_class.new(['[::1]:27017'], :database => TEST_DB)
+        new_local_client(['[::1]:27017'], :database => SpecConfig.instance.test_db)
       end
 
       context 'when providing nil' do
@@ -1363,7 +1349,7 @@ describe Mongo::Client do
 
     context 'when no option was provided to the client' do
 
-      let(:client) { described_class.new(['127.0.0.1:27017'], :database => TEST_DB) }
+      let(:client) { new_local_client(['127.0.0.1:27017'], :database => SpecConfig.instance.test_db) }
 
       it 'does not set the write concern' do
         expect(concern).to be_nil
@@ -1375,7 +1361,7 @@ describe Mongo::Client do
       context 'when the option is acknowledged' do
 
         let(:client) do
-          described_class.new(['127.0.0.1:27017'], :write => { :j => true }, :database => TEST_DB)
+          new_local_client(['127.0.0.1:27017'], :write => { :j => true }, :database => SpecConfig.instance.test_db)
         end
 
         it 'returns a acknowledged write concern' do
@@ -1388,7 +1374,7 @@ describe Mongo::Client do
         context 'when the w is 0' do
 
           let(:client) do
-            described_class.new(['127.0.0.1:27017'], :write => { :w => 0 }, :database => TEST_DB)
+            new_local_client(['127.0.0.1:27017'], :write => { :w => 0 }, :database => SpecConfig.instance.test_db)
           end
 
           it 'returns an unacknowledged write concern' do
@@ -1399,7 +1385,7 @@ describe Mongo::Client do
         context 'when the w is -1' do
 
           let(:client) do
-            described_class.new(['127.0.0.1:27017'], :write => { :w => -1 }, :database => TEST_DB)
+            new_local_client(['127.0.0.1:27017'], :write => { :w => -1 }, :database => SpecConfig.instance.test_db)
           end
 
           it 'raises an error' do
@@ -1427,7 +1413,7 @@ describe Mongo::Client do
       end
 
       let(:filter) do
-        { name: TEST_DB }
+        { name: SpecConfig.instance.test_db }
       end
 
       it 'returns a filtered list of database names' do
@@ -1453,7 +1439,7 @@ describe Mongo::Client do
       end
 
       let(:filter) do
-        { name: TEST_DB }
+        { name: SpecConfig.instance.test_db }
       end
 
       it 'returns a filtered list of database info documents' do
@@ -1480,10 +1466,6 @@ describe Mongo::Client do
 
       before do
         client.list_databases({}, true)
-      end
-
-      after do
-        client.close
       end
 
       it 'sends the command with the nameOnly flag set to true' do
@@ -1521,7 +1503,7 @@ describe Mongo::Client do
       end
 
       let(:filter) do
-        { name: TEST_DB }
+        { name: SpecConfig.instance.test_db }
       end
 
       it 'returns a filtered list of Mongo::Database objects' do
@@ -1534,7 +1516,7 @@ describe Mongo::Client do
   describe '#close' do
 
     let(:client) do
-      described_class.new(['127.0.0.1:27017'])
+      new_local_client(['127.0.0.1:27017'])
     end
 
     before do
@@ -1550,7 +1532,7 @@ describe Mongo::Client do
   describe '#reconnect' do
 
     let(:client) do
-      described_class.new(['127.0.0.1:27017'])
+      new_local_client(['127.0.0.1:27017'])
     end
 
     it 'replaces the cluster' do
@@ -1568,10 +1550,10 @@ describe Mongo::Client do
   describe '#dup' do
 
     let(:client) do
-      described_class.new(
+      new_local_client(
           ['127.0.0.1:27017'],
           :read => { :mode => :primary },
-          :database => TEST_DB
+          :database => SpecConfig.instance.test_db
       )
     end
 
@@ -1583,11 +1565,8 @@ describe Mongo::Client do
   describe '#collections' do
 
     before do
-      authorized_client.database[:users].create
-    end
-
-    after do
       authorized_client.database[:users].drop
+      authorized_client.database[:users].create
     end
 
     let(:collection) do
@@ -1715,7 +1694,7 @@ describe Mongo::Client do
     context 'when two clients have different clusters', if: test_sessions? do
 
       let(:client) do
-        authorized_client_with_retry_writes
+        another_authorized_client
       end
 
       let(:session) do

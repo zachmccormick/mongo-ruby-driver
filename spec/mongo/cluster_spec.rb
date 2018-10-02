@@ -7,7 +7,7 @@ describe Mongo::Cluster do
   end
 
   let(:cluster) do
-    described_class.new(SpecConfig.instance.addresses, monitoring, TEST_OPTIONS)
+    described_class.new(SpecConfig.instance.addresses, monitoring, SpecConfig.instance.test_options)
   end
 
   describe '#==' do
@@ -19,7 +19,7 @@ describe Mongo::Cluster do
         context 'when the options are the same' do
 
           let(:other) do
-            described_class.new(SpecConfig.instance.addresses, monitoring, TEST_OPTIONS)
+            described_class.new(SpecConfig.instance.addresses, monitoring, SpecConfig.instance.test_options)
           end
 
           it 'returns true' do
@@ -30,7 +30,7 @@ describe Mongo::Cluster do
         context 'when the options are not the same' do
 
           let(:other) do
-            described_class.new([ '127.0.0.1:27017' ], monitoring, TEST_OPTIONS.merge(:replica_set => 'test'))
+            described_class.new([ '127.0.0.1:27017' ], monitoring, SpecConfig.instance.test_options.merge(:replica_set => 'test'))
           end
 
           it 'returns false' do
@@ -42,7 +42,7 @@ describe Mongo::Cluster do
       context 'when the addresses are not the same' do
 
         let(:other) do
-          described_class.new([ '127.0.0.1:27018' ], monitoring, TEST_OPTIONS)
+          described_class.new([ '127.0.0.1:27999' ], monitoring, SpecConfig.instance.test_options)
         end
 
         it 'returns false' do
@@ -101,7 +101,7 @@ describe Mongo::Cluster do
         described_class.new(
           [ '127.0.0.1:27017' ],
           monitoring,
-          TEST_OPTIONS.merge(:connect => :replica_set, :replica_set => 'testing')
+          SpecConfig.instance.test_options.merge(:connect => :replica_set, :replica_set => 'testing')
         )
       end
 
@@ -113,7 +113,7 @@ describe Mongo::Cluster do
     context 'when the option is not provided' do
 
       let(:cluster) do
-        described_class.new([ '127.0.0.1:27017' ], monitoring, TEST_OPTIONS.merge(connect: :direct).delete_if { |k| k == :replica_set })
+        described_class.new([ '127.0.0.1:27017' ], monitoring, SpecConfig.instance.test_options.merge(connect: :direct).delete_if { |k| k == :replica_set })
       end
 
       it 'returns nil' do
@@ -143,16 +143,31 @@ describe Mongo::Cluster do
 
   describe '#servers' do
 
-    context 'when topology is single', if: single_seed? do
+    context 'when topology is single' do
+      before do
+        unless ClusterConfig.instance.single_server?
+          skip 'Topology is not a single server'
+        end
+      end
 
-      context 'when the server is a mongos', if: single_mongos?  do
+      context 'when the server is a mongos' do
+        before do
+          unless ClusterConfig.instance.mongos?
+            skip 'Topology is not a sharded cluster'
+          end
+        end
 
         it 'returns the mongos' do
           expect(cluster.servers.size).to eq(1)
         end
       end
 
-      context 'when the server is a replica set member', if: single_rs_member? do
+      context 'when the server is a replica set member' do
+        before do
+          unless ClusterConfig.instance.replica_set_name
+            skip 'Topology is not a replica set'
+          end
+        end
 
         it 'returns the replica set member' do
           expect(cluster.servers.size).to eq(1)
@@ -182,10 +197,10 @@ describe Mongo::Cluster do
         end
       end
 
-      context 'when topology is ReplicaSet' do
+      context 'when topology is ReplicaSetNoPrimary' do
 
         let(:topology) do
-          Mongo::Cluster::Topology::ReplicaSet.new({}, monitoring)
+          Mongo::Cluster::Topology::ReplicaSetNoPrimary.new({}, monitoring)
         end
 
         it 'returns an empty array' do
@@ -307,7 +322,6 @@ describe Mongo::Cluster do
 
     before do
       cluster.instance_variable_set(:@servers, servers)
-      cluster.instance_variable_set(:@addresses, addresses)
       cluster.remove('127.0.0.1:27017')
     end
 
@@ -316,7 +330,7 @@ describe Mongo::Cluster do
     end
 
     it 'removes the host from the list of addresses' do
-      expect(cluster.instance_variable_get(:@addresses)).to eq([address_b])
+      expect(cluster.addresses).to eq([address_b])
     end
   end
 
@@ -485,7 +499,7 @@ describe Mongo::Cluster do
   describe '#app_metadata' do
 
     it 'returns an AppMetadata object' do
-      expect(cluster.app_metadata).to be_a(Mongo::Cluster::AppMetadata)
+      expect(cluster.app_metadata).to be_a(Mongo::Server::AppMetadata)
     end
 
     context 'when the client has an app_name set' do
@@ -594,7 +608,7 @@ describe Mongo::Cluster do
   describe '#update_cluster_time' do
 
     let(:cluster) do
-      described_class.new(SpecConfig.instance.addresses, monitoring, TEST_OPTIONS.merge(heartbeat_frequency: 1000))
+      described_class.new(SpecConfig.instance.addresses, monitoring, SpecConfig.instance.test_options.merge(heartbeat_frequency: 1000))
     end
 
     let(:result) do

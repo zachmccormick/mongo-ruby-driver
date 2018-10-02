@@ -12,13 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-require 'mongo/server/connectable'
-require 'mongo/server/connection'
-require 'mongo/server/connection_pool'
-require 'mongo/server/context'
-require 'mongo/server/description'
-require 'mongo/server/monitor'
-
 module Mongo
 
   # Represents a single server on the server side that can be standalone, part of
@@ -28,6 +21,45 @@ module Mongo
   class Server
     extend Forwardable
     include Monitoring::Publishable
+
+    # The default time in seconds to timeout a connection attempt.
+    #
+    # @since 2.4.3
+    CONNECT_TIMEOUT = 10.freeze
+
+    # Instantiate a new server object. Will start the background refresh and
+    # subscribe to the appropriate events.
+    #
+    # @api private
+    #
+    # @example Initialize the server.
+    #   Mongo::Server.new('127.0.0.1:27017', cluster, monitoring, listeners)
+    #
+    # @note Server must never be directly instantiated outside of a Cluster.
+    #
+    # @param [ Address ] address The host:port address to connect to.
+    # @param [ Cluster ] cluster  The cluster the server belongs to.
+    # @param [ Monitoring ] monitoring The monitoring.
+    # @param [ Event::Listeners ] event_listeners The event listeners.
+    # @param [ Hash ] options The server options.
+    #
+    # @option options [ Boolean ] :monitor For internal driver use only:
+    #   whether to monitor the server after instantiating it.
+    #
+    # @since 2.0.0
+    def initialize(address, cluster, monitoring, event_listeners, options = {})
+      @address = address
+      @cluster = cluster
+      @monitoring = monitoring
+      options = options.dup
+      monitor = options.delete(:monitor)
+      @options = options.freeze
+      @monitor = Monitor.new(address, event_listeners, monitoring,
+        options.merge(app_metadata: Monitor::AppMetadata.new(cluster.options)))
+      unless monitor == false
+        start_monitoring
+      end
+    end
 
     # @return [ String ] The configured address for the server.
     attr_reader :address
@@ -43,11 +75,6 @@ module Mongo
 
     # @return [ Monitoring ] monitoring The monitoring.
     attr_reader :monitoring
-
-    # The default time in seconds to timeout a connection attempt.
-    #
-    # @since 2.4.3
-    CONNECT_TIMEOUT = 10.freeze
 
     # Get the description from the monitor and scan on monitor.
     def_delegators :monitor, :description, :scan!, :heartbeat_frequency, :last_scan, :compressor
@@ -152,33 +179,17 @@ module Mongo
       proc { monitor.stop! }
     end
 
-    # Instantiate a new server object. Will start the background refresh and
-    # subscribe to the appropriate events.
+    # Start monitoring the server.
+    #
+    # Used internally by the driver to add a server to a cluster
+    # while delaying monitoring until the server is in the cluster.
     #
     # @api private
-    #
-    # @example Initialize the server.
-    #   Mongo::Server.new('127.0.0.1:27017', cluster, monitoring, listeners)
-    #
-    # @note Server must never be directly instantiated outside of a Cluster.
-    #
-    # @param [ Address ] address The host:port address to connect to.
-    # @param [ Cluster ] cluster  The cluster the server belongs to.
-    # @param [ Monitoring ] monitoring The monitoring.
-    # @param [ Event::Listeners ] event_listeners The event listeners.
-    # @param [ Hash ] options The server options.
-    #
-    # @since 2.0.0
-    def initialize(address, cluster, monitoring, event_listeners, options = {})
-      @address = address
-      @cluster = cluster
-      @monitoring = monitoring
-      @options = options.freeze
+    def start_monitoring
       publish_sdam_event(
         Monitoring::SERVER_OPENING,
         Monitoring::Event::ServerOpening.new(address, cluster.topology)
       )
-      @monitor = Monitor.new(address, event_listeners, options.merge(app_metadata: cluster.app_metadata))
       monitor.scan!
       monitor.run!
       ObjectSpace.define_finalizer(self, self.class.finalize(monitor))
@@ -194,6 +205,33 @@ module Mongo
     # @since 2.0.0
     def inspect
       "#<Mongo::Server:0x#{object_id} address=#{address.host}:#{address.port}>"
+    end
+
+    # @api experimental
+    def summary
+      status = case
+      when primary?
+        'PRIMARY'
+      when secondary?
+        'SECONDARY'
+      when standalone?
+        'STANDALONE'
+      when arbiter?
+        'ARBITER'
+      when ghost?
+        'GHOST'
+      when other?
+        'OTHER'
+      end
+      if replica_set_name
+        status += " replica_set=#{replica_set_name}"
+      end
+      address_bit = if address
+        "#{address.host}:#{address.port}"
+      else
+        'nil'
+      end
+      "#<Server address=#{address_bit} #{status}>"
     end
 
     # Get the connection pool for this server.
@@ -266,7 +304,7 @@ module Mongo
     def handle_auth_failure!
       yield
     rescue Auth::Unauthorized
-      unknown!
+      pool.disconnect!
       raise
     end
 
@@ -286,3 +324,11 @@ module Mongo
     end
   end
 end
+
+require 'mongo/server/app_metadata'
+require 'mongo/server/connectable'
+require 'mongo/server/connection'
+require 'mongo/server/connection_pool'
+require 'mongo/server/context'
+require 'mongo/server/description'
+require 'mongo/server/monitor'

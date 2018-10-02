@@ -1,6 +1,13 @@
 require 'spec_helper'
 
 describe Mongo::Cursor do
+  let(:authorized_collection) do
+    authorized_client['cursor_spec_collection']
+  end
+
+  before do
+    authorized_collection.drop
+  end
 
   describe '#each' do
 
@@ -32,10 +39,6 @@ describe Mongo::Cursor do
           authorized_collection.insert_many(documents)
         end
 
-        after do
-          authorized_collection.delete_many
-        end
-
         it 'returns the correct amount' do
           expect(cursor.to_a.count).to eq(10)
         end
@@ -55,10 +58,6 @@ describe Mongo::Cursor do
 
         before do
           authorized_collection.insert_many(documents)
-        end
-
-        after do
-          authorized_collection.delete_many
         end
 
         context 'when a getMore gets a socket error' do
@@ -102,11 +101,8 @@ describe Mongo::Cursor do
       end
 
       before do
+        authorized_collection.drop
         authorized_collection.insert_many(documents)
-      end
-
-      after do
-        authorized_collection.delete_many
       end
 
       context 'when a limit is provided' do
@@ -250,10 +246,6 @@ describe Mongo::Cursor do
                                      cursor.instance_variable_get(:@server))
       end
 
-      after do
-        authorized_collection.delete_many
-      end
-
       let(:view) do
         Mongo::Collection::View.new(
             authorized_collection,
@@ -290,11 +282,8 @@ describe Mongo::Cursor do
       end
 
       before do
-        authorized_collection.insert_many(documents)
-      end
-
-      after do
         authorized_collection.delete_many
+        authorized_collection.insert_many(documents)
       end
 
       let(:view) do
@@ -334,10 +323,6 @@ describe Mongo::Cursor do
 
     before do
       collection.insert_many(documents)
-    end
-
-    after do
-      collection.delete_many
     end
 
     let(:cursor) do
@@ -412,7 +397,7 @@ describe Mongo::Cursor do
     end
 
     let(:query_spec) do
-      { :selector => {}, :options => {}, :db_name => TEST_DB, :coll_name => TEST_COLL }
+      { :selector => {}, :options => {}, :db_name => SpecConfig.instance.test_db, :coll_name => TEST_COLL }
     end
 
     let(:reply) do

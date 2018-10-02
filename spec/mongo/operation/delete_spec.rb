@@ -1,6 +1,16 @@
 require 'spec_helper'
 
 describe Mongo::Operation::Delete do
+  before do
+    begin
+      authorized_collection.delete_many
+    rescue Mongo::Error::OperationFailure
+    end
+    begin
+      authorized_collection.indexes.drop_all
+    rescue Mongo::Error::OperationFailure
+    end
+  end
 
   let(:document) do
     {
@@ -11,9 +21,9 @@ describe Mongo::Operation::Delete do
 
   let(:spec) do
     { :deletes        => [ document ],
-      :db_name       => TEST_DB,
+      :db_name       => SpecConfig.instance.test_db,
       :coll_name     => TEST_COLL,
-      :write_concern => Mongo::WriteConcern.get(WRITE_CONCERN),
+      :write_concern => Mongo::WriteConcern.get(SpecConfig.instance.write_concern),
       :ordered       => true
     }
   end
@@ -47,9 +57,9 @@ describe Mongo::Operation::Delete do
 
         let(:other_spec) do
           { :deletes        => [ other_doc ],
-            :db_name       => TEST_DB,
+            :db_name       => SpecConfig.instance.test_db,
             :coll_name     => TEST_COLL,
-            :write_concern => Mongo::WriteConcern.get(WRITE_CONCERN),
+            :write_concern => Mongo::WriteConcern.get(SpecConfig.instance.write_concern),
             :ordered       => true
           }
         end
@@ -80,9 +90,9 @@ describe Mongo::Operation::Delete do
       let(:delete) do
         described_class.new({
           deletes: [ document ],
-          db_name: TEST_DB,
+          db_name: SpecConfig.instance.test_db,
           coll_name: TEST_COLL,
-          write_concern: Mongo::WriteConcern.get(WRITE_CONCERN)
+          write_concern: Mongo::WriteConcern.get(SpecConfig.instance.write_concern)
         })
       end
 
@@ -124,9 +134,9 @@ describe Mongo::Operation::Delete do
       let(:delete) do
         described_class.new({
           deletes: [ document ],
-          db_name: TEST_DB,
+          db_name: SpecConfig.instance.test_db,
           coll_name: TEST_COLL,
-          write_concern: Mongo::WriteConcern.get(WRITE_CONCERN)
+          write_concern: Mongo::WriteConcern.get(SpecConfig.instance.write_concern)
         })
       end
 
@@ -188,7 +198,7 @@ describe Mongo::Operation::Delete do
       let(:delete) do
         described_class.new({
                               deletes: [ document ],
-                              db_name: TEST_DB,
+                              db_name: SpecConfig.instance.test_db,
                               coll_name: TEST_COLL,
                               write_concern: Mongo::WriteConcern.get(:w => 0)
                             })

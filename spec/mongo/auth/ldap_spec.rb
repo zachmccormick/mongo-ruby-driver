@@ -18,25 +18,24 @@ describe Mongo::Auth::LDAP do
     double('cluster').tap do |cl|
       allow(cl).to receive(:topology).and_return(topology)
       allow(cl).to receive(:app_metadata).and_return(app_metadata)
+      allow(cl).to receive(:options).and_return({})
       allow(cl).to receive(:cluster_time).and_return(nil)
       allow(cl).to receive(:update_cluster_time)
     end
   end
 
-  let(:topology) do
-    double('topology')
-  end
+  declare_topology_double
 
   let(:server) do
-    Mongo::Server.new(address, cluster, monitoring, listeners, TEST_OPTIONS)
+    Mongo::Server.new(address, cluster, monitoring, listeners, SpecConfig.instance.test_options)
   end
 
   let(:connection) do
-    Mongo::Server::Connection.new(server, TEST_OPTIONS)
+    Mongo::Server::Connection.new(server, SpecConfig.instance.test_options)
   end
 
   let(:user) do
-    Mongo::Auth::User.new(database: TEST_DB, user: 'driver', password: 'password')
+    Mongo::Auth::User.new(database: SpecConfig.instance.test_db, user: 'driver', password: 'password')
   end
 
   describe '#login' do
