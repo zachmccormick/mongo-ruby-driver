@@ -78,7 +78,8 @@ module Mongo
 
       UNAUTHORIZED_MESSAGES = [
         'unauthorized',
-        'not authorized'
+        'not authorized',
+        'there are no users authenticated'
       ].freeze
 
       def_delegators :@result, :operation_time
