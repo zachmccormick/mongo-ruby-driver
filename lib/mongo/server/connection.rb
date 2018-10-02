@@ -97,11 +97,16 @@ module Mongo
       # @since 2.0.0
       def connect!
         unless socket && socket.connectable?
-          @socket = address.socket(socket_timeout, ssl_options)
-          address.connect_socket!(socket)
-          handshake!
-          authenticate!
-          @server.cluster.restart_cursor_reaper()
+          begin
+            @socket = address.socket(socket_timeout, ssl_options)
+            address.connect_socket!(socket)
+            handshake!
+            authenticate!
+            @server.cluster.restart_cursor_reaper()
+          rescue Exception
+            @socket = nil
+            raise
+          end
         end
         true
       end
