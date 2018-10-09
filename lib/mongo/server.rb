@@ -54,6 +54,7 @@ module Mongo
       options = options.dup
       monitor = options.delete(:monitor)
       @options = options.freeze
+      @event_listeners = event_listeners
       @monitor = Monitor.new(address, event_listeners, monitoring,
         options.merge(app_metadata: Monitor::AppMetadata.new(cluster.options)))
       unless monitor == false
@@ -98,7 +99,6 @@ module Mongo
                    :secondary?,
                    :standalone?,
                    :unknown?,
-                   :unknown!,
                    :last_write_date,
                    :logical_session_timeout
 
@@ -289,6 +289,17 @@ module Mongo
       pool.with_connection(&block)
     end
 
+    # Handle handshake failure.
+    #
+    # @since 2.7.0
+    # @api private
+    def handle_handshake_failure!
+      yield
+    rescue Mongo::Error::SocketError, Mongo::Error::SocketTimeoutError
+      unknown!
+      raise
+    end
+
     # Handle authentication failure.
     #
     # @example Handle possible authentication failure.
@@ -303,7 +314,16 @@ module Mongo
     # @since 2.3.0
     def handle_auth_failure!
       yield
+    rescue Mongo::Error::SocketTimeoutError
+      # possibly cluster is slow, do not give up on it
+      raise
+    rescue Mongo::Error::SocketError
+      # non-timeout network error
+      unknown!
+      pool.disconnect!
+      raise
     rescue Auth::Unauthorized
+      # auth error, keep server description and topology as they are
       pool.disconnect!
       raise
     end
@@ -321,6 +341,17 @@ module Mongo
     # @since 2.5.0
     def retry_writes?
       !!(features.sessions_enabled? && logical_session_timeout && !standalone?)
+    end
+
+    # Marks server unknown and publishes the associated SDAM event
+    # (server description changed).
+    #
+    # @since 2.4.0, SDAM events are sent as of version 2.7.0
+    def unknown!
+      old_description = description
+      monitor.unknown!
+      inspector = Description::Inspector::DescriptionChanged.new(@event_listeners)
+      inspector.run(old_description, description)
     end
   end
 end

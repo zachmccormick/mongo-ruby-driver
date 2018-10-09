@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2018 MongoDB, Inc.
+# Copyright (C) 2018 MongoDB, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the 'License');
 # you may not use this file except in compliance with the License.
@@ -15,15 +15,15 @@
 module Mongo
   class Monitoring
 
-    # Subscribes to Topology Opening events and logs them.
+    # Subscribes to Topology Closed events and logs them.
     #
-    # @since 2.4.0
-    class TopologyOpeningLogSubscriber < SDAMLogSubscriber
+    # @since 2.7.0
+    class TopologyClosedLogSubscriber < SDAMLogSubscriber
 
       private
 
       def log_event(event)
-        log_debug("Topology type '#{event.topology.display_name.downcase}' initializing.")
+        log_debug("Topology type '#{event.topology.display_name.downcase}' closed.")
       end
     end
   end
