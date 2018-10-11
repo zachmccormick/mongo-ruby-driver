@@ -368,10 +368,8 @@ module Mongo
       address = Address.new(host)
       removed_servers = @servers.select { |s| s.address == address }
       @update_lock.synchronize { @servers = @servers - removed_servers }
-      if removed_servers
-        removed_servers.each do |server|
-          server.disconnect!
-        end
+      removed_servers.each do |server|
+        server.disconnect!
       end
       publish_sdam_event(
         Monitoring::SERVER_CLOSED,
@@ -595,12 +593,8 @@ module Mongo
     rescue Error::NoServerAvailable
     end
 
-    def direct_connection?(address)
-      address.seed == @topology.seed
-    end
-
     def addition_allowed?(address)
-      !@topology.single? || direct_connection?(address)
+      !@topology.single? || [address.seed] == @topology.addresses
     end
 
     def pools
