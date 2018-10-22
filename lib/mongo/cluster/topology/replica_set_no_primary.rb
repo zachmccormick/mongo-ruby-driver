@@ -32,12 +32,9 @@ module Mongo
 
         # Initialize the topology with the options.
         #
-        # @example Initialize the topology.
-        #   ReplicaSetNoPrimary.new(options)
-        #
         # @param [ Hash ] options The options.
         # @param [ Monitoring ] monitoring The monitoring.
-        # @param [ Array<String> ] addresses Addresses of servers in the topology.
+        # @param [ Cluster ] cluster The cluster.
         # @param max_election_id For internal driver use only.
         # @param max_set_version For internal driver use only.
         #
@@ -51,10 +48,10 @@ module Mongo
         #
         # @since 2.7.0
         # @api private
-        def initialize(options, monitoring, addresses = [],
+        def initialize(options, monitoring, cluster,
           max_election_id = nil, max_set_version = nil
         )
-          super(options, monitoring, addresses)
+          super(options, monitoring, cluster)
           @max_election_id = max_election_id
           @max_set_version = max_set_version
         end
@@ -79,7 +76,7 @@ module Mongo
 
         # @api experimental
         def summary
-          display_name.gsub(' ', '')
+          "#{display_name.gsub(' ', '')}[v=#{@max_set_version},e=#{@max_election_id && @max_election_id.to_s.sub(/^0+/, '')}]"
         end
 
         # Elect a primary server within this topology.
@@ -94,23 +91,7 @@ module Mongo
         #
         # @return [ ReplicaSetWithPrimary ] The topology.
         def elect_primary(description, servers)
-          if description.replica_set_name == replica_set_name
-            unless detect_stale_primary!(description)
-              servers.each do |server|
-                if server.primary? && server.address != description.address
-                  server.description.unknown!
-                end
-              end
-              update_max_election_id(description)
-              update_max_set_version(description)
-            end
-          else
-            log_warn(
-              "Server #{description.address.to_s} has incorrect replica set name: " +
-              "'#{description.replica_set_name}'. The current replica set name is '#{replica_set_name}'."
-            )
-          end
-          ReplicaSetWithPrimary.new(options, monitoring, [], @max_election_id, @max_set_version)
+          self
         end
 
         # Determine if the topology would select a readable server for the
@@ -215,7 +196,7 @@ module Mongo
             (description.primary? ||
               description.me_mismatch? ||
                 description.hosts.empty? ||
-                  !member_of_this_set?(description))
+                  (!description.ghost? && !member_of_this_set?(description)))
         end
 
         # Whether a specific server in the cluster can be removed, given a description.
@@ -274,16 +255,6 @@ module Mongo
         # @since 2.0.0
         def unknown?; false; end
 
-        # Notify the topology that a standalone was discovered.
-        #
-        # @example Notify the topology that a standalone was discovered.
-        #   topology.standalone_discovered
-        #
-        # @return [ Topology::ReplicaSet ] Always returns self.
-        #
-        # @since 2.0.6
-        def standalone_discovered; self; end
-
         # Notify the topology that a member was discovered.
         #
         # @example Notify the topology that a member was discovered.
@@ -292,8 +263,23 @@ module Mongo
         # @since 2.4.0
         def member_discovered; end;
 
-        private
+        # The largest electionId ever reported by a primary.
+        # May be nil.
+        #
+        # @return [ BSON::ObjectId ] The election id.
+        #
+        # @since 2.7.0
+        attr_reader :max_election_id
 
+        # The largest setVersion ever reported by a primary.
+        # May be nil.
+        #
+        # @return [ Integer ] The set version.
+        #
+        # @since 2.7.0
+        attr_reader :max_set_version
+
+        # @api private
         def update_max_election_id(description)
           if description.election_id &&
               (@max_election_id.nil? ||
@@ -302,6 +288,7 @@ module Mongo
           end
         end
 
+        # @api private
         def update_max_set_version(description)
           if description.set_version &&
               (@max_set_version.nil? ||
@@ -310,16 +297,7 @@ module Mongo
           end
         end
 
-        def detect_stale_primary!(description)
-          if description.election_id && description.set_version
-            if @max_set_version && @max_election_id &&
-                (description.set_version < @max_set_version ||
-                    (description.set_version == @max_set_version &&
-                        description.election_id < @max_election_id))
-              description.unknown!
-            end
-          end
-        end
+        private
 
         def has_primary?(servers)
           servers.find { |s| s.primary? }

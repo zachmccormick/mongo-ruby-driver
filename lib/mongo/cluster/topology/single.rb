@@ -190,27 +190,14 @@ module Mongo
         # @since 2.0.0
         def unknown?; false; end
 
-        # Notify the topology that a standalone was discovered.
-        #
-        # @example Notify the topology that a standalone was discovered.
-        #   topology.standalone_discovered
-        #
-        # @return [ Topology::Single ] Always returns self.
-        #
-        # @since 2.0.6
-        def standalone_discovered; self; end
-
         # Publish that a member of this topology was discovered.
         #
         # @example Publish that a member was discovered.
         #   topology.member_discovered
         #
         # @since 2.4.0
+        # @deprecated Does nothing.
         def member_discovered
-          publish_sdam_event(
-            Monitoring::TOPOLOGY_CHANGED,
-            Monitoring::Event::TopologyChanged.new(self, self)
-          )
         end
       end
     end

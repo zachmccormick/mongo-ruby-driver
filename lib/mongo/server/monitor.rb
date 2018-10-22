@@ -166,15 +166,22 @@ module Mongo
       # @example Stop the monitor.
       #   monitor.stop!
       #
+      # @param [ Boolean ] wait Whether to wait for background threads to
+      #   finish running.
+      #
       # @return [ Boolean ] Is the thread stopped?
       #
       # @since 2.0.0
-      def stop!
+      def stop!(wait=false)
         # Although disconnect! documentation implies a possibility of
         # failure, all of our disconnects always return true
         if connection.disconnect!
           if @thread
-            @thread.kill && @thread.stop?
+            @thread.kill
+            if wait
+              @thread.join
+            end
+            !@thread.alive?
           else
             true
           end
@@ -212,27 +219,33 @@ module Mongo
       def ismaster
         @mutex.synchronize do
           start = Time.now
-          monitoring.started(
-            Monitoring::SERVER_HEARTBEAT,
-            Monitoring::Event::ServerHeartbeatStarted.new(connection.address)
-          )
+          if monitoring.monitoring?
+            monitoring.started(
+              Monitoring::SERVER_HEARTBEAT,
+              Monitoring::Event::ServerHeartbeatStarted.new(connection.address)
+            )
+          end
 
           begin
             result = connection.ismaster
           rescue Exception => e
             rtt, @average_round_trip_time = round_trip_times(start)
             log_debug("Error running ismaster on #{connection.address}: #{e.message}")
-            monitoring.failed(
-              Monitoring::SERVER_HEARTBEAT,
-              Monitoring::Event::ServerHeartbeatFailed.new(connection.address, rtt, e)
-            )
+            if monitoring.monitoring?
+              monitoring.failed(
+                Monitoring::SERVER_HEARTBEAT,
+                Monitoring::Event::ServerHeartbeatFailed.new(connection.address, rtt, e)
+              )
+            end
             result = {}
           else
             rtt, @average_round_trip_time = round_trip_times(start)
-            monitoring.succeeded(
-              Monitoring::SERVER_HEARTBEAT,
-              Monitoring::Event::ServerHeartbeatSucceeded.new(connection.address, rtt)
-            )
+            if monitoring.monitoring?
+              monitoring.succeeded(
+                Monitoring::SERVER_HEARTBEAT,
+                Monitoring::Event::ServerHeartbeatSucceeded.new(connection.address, rtt)
+              )
+            end
           end
           result
         end

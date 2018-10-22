@@ -42,7 +42,7 @@ module Mongo
 
         # @api experimental
         def summary
-          "#{display_name}[#{@addresses.join(', ')}]"
+          "#{display_name}[#{addresses.join(', ')}]"
         end
 
         # Elect a primary server within this topology.
@@ -56,14 +56,8 @@ module Mongo
         #   cluster.
         #
         # @return [ Sharded, ReplicaSetNoPrimary, ReplicaSetWithPrimary ] The new topology.
+        # @deprecated Does nothing.
         def elect_primary(description, servers)
-          if description.mongos?
-            sharded = Sharded.new(options, monitoring)
-            topology_changed(sharded)
-            sharded
-          else
-            initialize_replica_set(description, servers)
-          end
         end
 
         # Determine if the topology would select a readable server for the
@@ -203,61 +197,14 @@ module Mongo
           description.standalone? && description.is_server?(server)
         end
 
-        # Notify the topology that a standalone was discovered.
-        #
-        # @example Notify the topology that a standalone was discovered.
-        #   topology.standalone_discovered
-        #
-        # @return [ Topology::Unknown, Topology::Single ] Either self or a
-        #   new Single topology.
-        #
-        # @since 2.0.6
-        def standalone_discovered
-          if @addresses.size == 1
-            single = Single.new(options, monitoring, @addresses)
-            topology_changed(single)
-            single
-          else
-            self
-          end
-        end
-
         # Notify the topology that a member was discovered.
         #
         # @example Notify the topology that a member was discovered.
         #   topology.member_discovered
         #
         # @since 2.4.0
+        # @deprecated Does nothing.
         def member_discovered
-          publish_sdam_event(
-            Monitoring::TOPOLOGY_CHANGED,
-            Monitoring::Event::TopologyChanged.new(self, self)
-          )
-        end
-
-        private
-
-        def initialize_replica_set(description, servers)
-          servers.each do |server|
-            if server.standalone? && server.address != description.address
-              server.description.unknown!
-            end
-          end
-          cls = if description.primary?
-            ReplicaSetWithPrimary
-          else
-            ReplicaSetNoPrimary
-          end
-          replica_set = cls.new(options.merge(:replica_set => description.replica_set_name), monitoring)
-          topology_changed(replica_set)
-          replica_set
-        end
-
-        def topology_changed(new_topology)
-          publish_sdam_event(
-            Monitoring::TOPOLOGY_CHANGED,
-            Monitoring::Event::TopologyChanged.new(self, new_topology)
-          )
         end
       end
     end
