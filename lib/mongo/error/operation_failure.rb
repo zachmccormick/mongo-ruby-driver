@@ -59,6 +59,10 @@ module Mongo
         '(11600)',
         # "operation was interrupted"
         '(11602)',
+        'transport error',
+        'socket exception',
+        "can't connect",
+        'end of file',
       ].map(&:downcase).freeze
 
       # These are magic error messages that could indicate a cluster
