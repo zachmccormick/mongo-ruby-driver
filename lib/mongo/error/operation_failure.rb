@@ -63,6 +63,7 @@ module Mongo
         'socket exception',
         "can't connect",
         'end of file',
+        'Connection reset by peer'
       ].map(&:downcase).freeze
 
       # These are magic error messages that could indicate a cluster
