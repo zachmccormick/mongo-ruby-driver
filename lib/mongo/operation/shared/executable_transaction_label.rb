@@ -26,7 +26,7 @@ module Mongo
       def execute(server)
         super
       rescue Mongo::Error::SocketError => e
-        e.send(:add_label, Mongo::Error::TRANSIENT_TRANSACTION_ERROR_LABEL) if session.in_transaction?
+        e.send(:add_label, Mongo::Error::TRANSIENT_TRANSACTION_ERROR_LABEL) if session && session.in_transaction?
         raise e
       end
     end
