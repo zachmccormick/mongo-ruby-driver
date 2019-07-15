@@ -48,7 +48,24 @@ module Mongo
       WRITE_RETRY_MESSAGES = [
         'not master',
         'node is recovering',
-      ].freeze
+        'not master',
+        'could not contact primary',
+        'Not primary',
+        'Primary stepped down while waiting for replication',
+        'write results unavailable',
+        'could not find host matching read preference',
+        'stepdown request while waiting for replication',
+        'demoted from primary while performing',
+        # InterruptedAtShutdown
+        '(11600)',
+        # "operation was interrupted"
+        '(11602)',
+        'transport error',
+        'socket exception',
+        "can't connect",
+        'end of file',
+        'Connection reset by peer'
+      ].map(&:downcase).freeze
 
       # These are magic error messages that could indicate a cluster
       # reconfiguration behind a mongos.
@@ -59,14 +76,31 @@ module Mongo
         'transport error',
         'socket exception',
         "can't connect",
+        'end of file',
         'connect failed',
         'error querying',
         'could not get last error',
         'connection attempt failed',
         'interrupted at shutdown',
         'unknown replica set',
-        'dbclient error communicating with server'
-      ].freeze
+        'dbclient error communicating with server',
+        'Server is shutting down',
+        'no progress was made executing batch write op',
+        'dbclient error communicating with server',
+        'Failed to call say, no good nodes',
+        'Failed to do query, no good nodes',
+        'assertion src/mongo/util/net/message.h:256',
+        'Shutdown in progress',
+        'shutdown in progress',
+        'could not find host matching read preference',
+        # NotMasterOrSecondary
+        '(13436)',
+        'error reading response',
+        'network error while attempting to run',
+        "Can't use connection pool during shutdown",
+        "aggregate command didn't return results on host",
+        "Callback canceled"
+      ].map(&:downcase).freeze
 
       def_delegators :@result, :operation_time
 
@@ -88,7 +122,7 @@ module Mongo
       # @since 2.1.1
       # @deprecated
       def retryable?
-        RETRY_MESSAGES.any?{ |m| message.include?(m) }
+        RETRY_MESSAGES.any?{ |m| message.downcase.include?(m) }
       end
 
       # Whether the error is a retryable error according to the modern retryable
@@ -101,7 +135,7 @@ module Mongo
       #
       # @since 2.4.2
       def write_retryable?
-        WRITE_RETRY_MESSAGES.any? { |m| message.include?(m) } ||
+        WRITE_RETRY_MESSAGES.any? { |m| message.downcase.include?(m) } ||
         write_retryable_code?
       end
 
@@ -152,7 +186,7 @@ module Mongo
       end
 
       def change_stream_resumable_message?
-        CHANGE_STREAM_RESUME_MESSAGES.any? { |m| message.include?(m) }
+        CHANGE_STREAM_RESUME_MESSAGES.any? { |m| message.downcase.include?(m) }
       end
       private :change_stream_resumable_message?
 

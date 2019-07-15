@@ -104,7 +104,7 @@ module Mongo
         # here but upgrading Mongoid is strongly recommended.
         unless $_mongo_read_with_retry_warned
           $_mongo_read_with_retry_warned = true
-          Logger.logger.warn("Legacy read_with_retry invocation - please update the application and/or its dependencies")
+          Logger.logger.warn("[jontest] Legacy read_with_retry invocation - please update the application and/or its dependencies")
         end
         # Since we don't have a session, we cannot use the modern read retries.
         # And we need to select a server but we don't have a server selector.
@@ -270,13 +270,13 @@ module Mongo
         attempt += 1
         server ||= select_server(cluster, ServerSelector.primary, session)
         yield server
-      rescue Error::OperationFailure => e
+      rescue Error::SocketError, Error::SocketTimeoutError, Error::OperationFailure, Error::NoServerAvailable, Mongo::Error, Mongo::Error::BulkWriteError => e
         server = nil
         if attempt > client.max_write_retries
           raise
         end
         if e.write_retryable? && !(session && session.in_transaction?)
-          log_retry(e, message: 'Legacy write retry')
+          log_retry(e, message: "Legacy write retry got operation failure in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
           cluster.scan!(false)
           retry
         else
@@ -323,7 +323,8 @@ module Mongo
           if attempt > client.max_read_retries
             raise
           end
-          log_retry(e, message: 'Legacy read retry')
+
+          log_retry(e, message: "Legacy read retry for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}, max retries is #{max_read_retries}")
           sleep(client.read_retry_interval)
           server = select_server(cluster, server_selector, session)
           retry
@@ -401,7 +402,7 @@ module Mongo
       else
         "Retry"
       end
-      Logger.logger.warn "#{message} due to: #{e.class.name} #{e.message}"
+      Logger.logger.warn "[jontest] #{message} due to: #{e.class.name} #{e.message}"
     end
   end
 end
