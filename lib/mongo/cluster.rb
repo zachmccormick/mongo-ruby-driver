@@ -265,6 +265,10 @@ module Mongo
       options[:max_read_retries] || MAX_READ_RETRIES
     end
 
+    def max_write_retries
+      options[:max_write_retries] || MAX_WRITE_RETRIES
+    end
+
     # Get the interval, in seconds, in which read retries when using legacy
     # read retries.
     #
