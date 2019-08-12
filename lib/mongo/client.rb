@@ -47,6 +47,7 @@ module Mongo
       :max_idle_time,
       :max_pool_size,
       :max_read_retries,
+      :max_write_retries,
       :min_pool_size,
       :monitoring,
       :monitoring_io,
