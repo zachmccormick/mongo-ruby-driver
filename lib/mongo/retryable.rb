@@ -319,7 +319,7 @@ module Mongo
         if attempt > client.max_read_retries || (session && session.in_transaction?)
           raise
         end
-        log_retry(e, message: "Legacy read retry for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}, max retries is #{max_read_retries}")
+        log_retry(e, message: "Legacy read retry for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}, max retries is #{client.max_read_retries}")
         server = select_server(cluster, server_selector, session)
         retry
       rescue Error::OperationFailure => e
@@ -327,7 +327,7 @@ module Mongo
           if attempt > client.max_read_retries
             raise
           end
-          log_retry(e, message: "Legacy read retry for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}, max retries is #{max_read_retries}")
+          log_retry(e, message: "Legacy read retry for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}, max retries is #{client.max_read_retries}")
           sleep(client.read_retry_interval)
           server = select_server(cluster, server_selector, session)
           retry
