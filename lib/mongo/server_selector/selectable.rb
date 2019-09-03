@@ -374,7 +374,10 @@ module Mongo
         # Default for legacy signarure
         local_threshold ||= self.local_threshold
         threshold = smallest_avg_rtt + local_threshold
-        candidates.select { |server| server.average_round_trip_time && server.average_round_trip_time <= threshold }.shuffle!
+        candidates.select do |server|
+          rtt = server.average_round_trip_time
+          rtt && rtt <= threshold
+        end.shuffle!
       end
 
       # Select the servers matching the defined tag sets.
