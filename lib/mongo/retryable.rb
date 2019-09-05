@@ -278,7 +278,7 @@ module Mongo
         if attempt > client.max_write_retries
           raise
         end
-        if e.write_retryable? && !(session && session.in_transaction?)
+        if !(session && session.in_transaction?) && ((e.kind_of?(Error::OperationFailure) && e.write_retryable?) || !e.kind_of?(Error::OperationFailure) )
           log_retry(e, message: "Legacy write retry got operation failure in write on #{cluster.servers.inspect}, attempt #{attempt}: #{e.inspect()}")
           cluster.scan!(false)
           sleep(client.read_retry_interval)
