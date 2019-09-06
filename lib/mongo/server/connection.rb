@@ -369,6 +369,9 @@ module Mongo
               Auth.get(user).login(pending_connection)
             rescue => e
               if !retried
+                # Attempt to disconnect to try to re-authenticate
+                @server.pool.disconnect!
+
                 log_warn("[jontest] Failed to handshake with #{address}, retrying: #{e.class}: #{e}")
                 retried = true
                 sleep(0.050)
