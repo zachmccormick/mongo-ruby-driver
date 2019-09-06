@@ -363,10 +363,17 @@ module Mongo
       def authenticate!(pending_connection)
         if options[:user] || options[:auth_mech]
           user = Auth::User.new(Options::Redacted.new(:auth_mech => default_mechanism).merge(options))
+          retried = false
           @server.handle_auth_failure! do
             begin
               Auth.get(user).login(pending_connection)
             rescue => e
+              if !retried
+                log_warn("[jontest] Failed to handshake with #{address}, retrying: #{e.class}: #{e}")
+                retried = true
+                sleep(0.050)
+                retry
+              end
               log_warn("[jontest] Failed to handshake with #{address}: #{e.class}: #{e}")
               raise
             end
