@@ -349,7 +349,7 @@ module Mongo
             if features.scram_sha_1_enabled?
               :scram
             else
-              :mongodb_cr
+              :scram
             end
           end
         else
@@ -385,7 +385,7 @@ module Mongo
       end
 
       def default_mechanism
-        @auth_mechanism || (@server.features.scram_sha_1_enabled? ? :scram : :mongodb_cr)
+        @auth_mechanism || (@server.features.scram_sha_1_enabled? ? :scram : :scram)
       end
 
       def deliver(message)
