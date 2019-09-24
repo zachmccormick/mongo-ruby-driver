@@ -321,12 +321,21 @@ module Mongo
         end
         log_retry(e, message: "Legacy read retry for read on #{cluster.servers.inspect}: #{e.inspect}, attempt #{attempt}, max retries is #{client.max_read_retries}")
         server = select_server(cluster, server_selector, session)
+        if e.message.include?("EOFError")
+          server.disconnect!
+          server.instance_variable_get(:@monitor).instance_variable_set(:@stop_requested, nil)
+          server.reconnect!
+        end
         retry
       rescue Error::OperationFailure, ArgumentError => e
         conn_in_bad_state = (e.kind_of?(ArgumentError) && e.message.include?("is not valid UTF-8")) || e.message.include?("not null terminated string")
         if conn_in_bad_state
           Logger.logger.warn "[jontest] got server in bad state for #{cluster.servers.inspect}: #{e.inspect()}"
-          cluster.servers.each {|s| s.disconnect! }
+          cluster.servers.each do |s|
+            s.disconnect!
+            s.instance_variable_get(:@monitor).instance_variable_set(:@stop_requested, nil)
+            s.reconnect!
+          end
 
           # Only retry one more time
           attempt = [attempt, client.max_read_retries].max()
