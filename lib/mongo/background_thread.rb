@@ -32,7 +32,7 @@ module Mongo
     def run!
       if @stop_requested && @thread
         wait_for_stop
-        if @thread.alive?
+        if @thread && @thread.alive?
           log_warn("Starting a new background thread in #{self}, but the previous background thread is still running")
           @thread = nil
         end
@@ -87,7 +87,9 @@ module Mongo
       #
       # Note that this may cause the background thread to terminate in
       # the middle of an operation.
-      @thread.kill
+      if @thread
+        @thread.kill
+      end
 
       wait_for_stop
     end
@@ -119,7 +121,9 @@ module Mongo
       ([0.1, 0.15] + [0.2] * 5 + [0.3] * 20).each do |interval|
         begin
           Timeout.timeout(interval) do
-            @thread.join
+            if @thread
+              @thread.join
+            end
           end
           break
         rescue Timeout::Error
@@ -128,7 +132,7 @@ module Mongo
 
       # Some driver objects can be reconnected, for backwards compatibiilty
       # reasons. Clear the thread instance variable to support this cleanly.
-      if @thread.alive?
+      if @thread && @thread.alive?
         log_warn("Failed to stop background thread in #{self} in #{(Time.now - start_time).to_i} seconds")
         false
       else
