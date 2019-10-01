@@ -330,7 +330,7 @@ module Mongo
         conn_in_bad_state = (e.kind_of?(ArgumentError) && e.message.include?("is not valid UTF-8")) || e.message.include?("not null terminated string")
         if conn_in_bad_state
           Logger.logger.warn "[jontest] got server in bad state for #{cluster.servers.inspect}: #{e.inspect()}"
-          cluster.disconnect!
+          cluster.disconnect!(true)
           cluster.reconnect!
 
           # Only retry one more time
