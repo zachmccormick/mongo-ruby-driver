@@ -542,6 +542,37 @@ describe Mongo::Client do
             expect(client.cluster.next_primary.monitor.compressor).to be_nil
           end
         end
+
+        context 'when snappy compressor is provided' do
+          min_server_version '3.6'
+
+          let(:options) do
+            { compressors: ['snappy'] }
+          end
+
+          context 'when snappy gem is installed' do
+            require_snappy_compression
+
+            it 'creates the client' do
+              expect(client.options['compressors']).to eq(['snappy'])
+            end
+          end
+
+          context 'when snappy gem is not installed' do
+            before do
+              compressors = SpecConfig.instance.compressors
+              if compressors && compressors.include?('snappy')
+                skip "Snappy compression is enabled"
+              end
+            end
+
+            it 'raises an exception' do
+              expect do
+                client
+              end.to raise_error(Mongo::Error::UnmetDependency, /Cannot enable snappy compression/)
+            end
+          end
+        end
       end
 
       context 'when compressors are not provided' do
@@ -845,7 +876,7 @@ describe Mongo::Client do
         end
 
         context 'mri' do
-          only_mri
+          require_mri
 
           let(:platform_string) do
             [
@@ -1312,7 +1343,7 @@ describe Mongo::Client do
         end
 
         context 'when not linting' do
-          skip_if_linting
+          require_no_linting
 
           it 'rejects bogus read preference as symbol' do
             expect do
@@ -1359,7 +1390,7 @@ describe Mongo::Client do
         end
 
         context 'when read concern has an invalid key' do
-          skip_if_linting
+          require_no_linting
 
           let(:options) do
             { read_concern: { hello: :local } }
